@@ -96,6 +96,19 @@ pip install visiter[validate]
 visiter iterate '...' | visiter validate
 ```
 
+The `analyze` subcommand bridges to [NetworkX](https://networkx.org/)
+so you can run any of its hundreds of graph algorithms on the output
+(cycles, shortest paths, centrality, strongly-connected components,
+...) — and when the algorithm returns a NetworkX graph itself, it
+flows straight back into `visiter to-dot`:
+
+```bash
+pip install visiter[analytics]
+visiter iterate '...' \
+  | visiter analyze 'nx.condensation(graph)' \
+  | visiter to-dot '' | dot -Tsvg > scc.svg
+```
+
 ## Why VisIter?
 
 The short pitch: VisIter is **free, scriptable, Graphviz-native,

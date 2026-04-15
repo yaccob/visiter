@@ -151,7 +151,7 @@ discrete reachability graphs.
 | Wedged-pie fills for branching nodes                |    ✓    |    —     |     —     |   —   |  —   |
 | Anchor/radius cropping at render time               |    ✓    |    —     |    ✓⁵     |   —   |  —   |
 | JSON Schema for graph dict                          |    ✓    |    —     |     —     |   —   |  —   |
-| Hundreds of graph algorithms                        |    —    |    ✓     |     ✓     |   —   |  —   |
+| Hundreds of graph algorithms                        |   ✓⁶    |    ✓     |     ✓     |   —   |  —   |
 | Formal verification (CTL/LTL)                       |    —    |    —     |     —     |   ✓   |  ✓   |
 
 ¹ NetworkX can do this, but the wiring is yours to write.
@@ -160,6 +160,10 @@ discrete reachability graphs.
   pipe composition like VisIter's `iterate | to-dot | dot`.
 ⁴ Any term in the user's signature, not any hashable Python object.
 ⁵ Via `NeighborhoodGraph` / `Subgraph`; separate primitive.
+⁶ Via the `[analytics]` extra, which bridges to NetworkX: install with
+  `pip install visiter[analytics]`, then use `visiter.analytics.to_networkx`
+  or the `visiter analyze` CLI subcommand. See
+  [manual §8](manual.md#8-integrating-with-networkx).
 
 ## When **not** to reach for VisIter
 

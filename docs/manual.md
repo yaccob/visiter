@@ -473,3 +473,98 @@ Validate a graph document against the bundled schema via the CLI:
 pip install visiter[validate]
 visiter iterate '...' | visiter validate
 ```
+
+---
+
+## 8. Integrating with NetworkX
+
+VisIter builds iteration graphs and renders them. For everything in
+between — cycle detection, shortest paths, centrality measures,
+strongly-connected components, topological sort, bipartite matching,
+community detection, and many more — [NetworkX](https://networkx.org/)
+is the mature Python answer. Rather than wrap any of NetworkX's
+algorithms ourselves, VisIter ships a thin *bridge* that translates
+between its own graph dict and a `networkx.DiGraph`.
+
+### Install
+
+```bash
+pip install visiter[analytics]
+```
+
+That pulls `networkx>=3.0` alongside VisIter's core deps.
+
+### Python API
+
+`visiter.analytics` exports two functions:
+
+```python
+from visiter import iterate, Op, Rule, to_dot
+from visiter.analytics import to_networkx, from_networkx
+import networkx as nx
+
+graph = iterate(
+    start=range(1, 30),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
+    default=Op(lambda x: x + 2, "+2"),
+)
+
+g = to_networkx(graph)
+# Now the entire NetworkX toolbox is available:
+cycles       = list(nx.simple_cycles(g))
+path_to_one  = nx.shortest_path(g, source="5", target="1")
+centrality   = nx.in_degree_centrality(g)
+condensation = nx.condensation(g)   # a new nx.DiGraph, one node per SCC
+
+# If the NetworkX call returns a graph, you can render that too:
+dot = to_dot(from_networkx(condensation))
+```
+
+`to_networkx` preserves node keys (as strings — this is the only
+identity the graph dict actually guarantees), node attributes
+(`depth`, `tags`), and edge attributes (`op`). Top-level fields
+(`roots`, `pseudo_edges`, `op_order`, `schema_version`) are stashed
+on `nx.DiGraph.graph` so `from_networkx` can reproduce the original
+dict exactly. Round-trip is information-preserving for VisIter graphs;
+for bare NetworkX graphs without VisIter metadata you get a minimal
+but schema-valid result.
+
+### CLI
+
+The `analyze` subcommand mirrors the Python API over shell pipes:
+
+```bash
+visiter iterate '...' | visiter analyze '<python expression>'
+```
+
+`graph` (a `networkx.DiGraph`) and `nx` are pre-bound in the eval
+namespace. The expression's result is written to stdout as JSON; if
+it is itself a NetworkX graph, it is emitted as a VisIter graph dict,
+so the output flows straight into `visiter to-dot`:
+
+```bash
+# Count things.
+visiter iterate '...' | visiter analyze 'nx.number_of_nodes(graph)'
+
+# List cycles.
+visiter iterate '...' | visiter analyze 'list(nx.simple_cycles(graph))'
+
+# Pipe a derived graph back into rendering.
+visiter iterate '...' \
+  | visiter analyze 'nx.condensation(graph)' \
+  | visiter to-dot '' \
+  | dot -Tsvg > scc.svg
+```
+
+See [`demos/05_analyze_cycles_and_depths.sh`](../demos/05_analyze_cycles_and_depths.sh),
+[`demos/06_analyze_condensation.sh`](../demos/06_analyze_condensation.sh),
+and [`demos/07_analyze_shortest_paths.sh`](../demos/07_analyze_shortest_paths.sh)
+for runnable end-to-end examples.
+
+### Scope
+
+The bridge is deliberately thin: two Python functions plus one CLI
+subcommand. We don't wrap individual NetworkX algorithms — their
+names are already their documentation, and wrapping would only
+duplicate surface area we can't maintain. Everything NetworkX can do
+is one `nx.<something>(graph)` call away.

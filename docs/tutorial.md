@@ -194,6 +194,26 @@ for inserting validation into the pipeline.
 
 ---
 
+## Can I run graph algorithms on the result?
+
+Yes — via the `[analytics]` extra, which bridges VisIter's graph dict
+to [NetworkX](https://networkx.org/). NetworkX ships hundreds of graph
+algorithms (cycles, shortest paths, centrality, condensation,
+strongly-connected components, ...); VisIter doesn't wrap them, it
+just hands the graph over.
+
+```bash
+pip install visiter[analytics]
+visiter iterate '...' | visiter analyze 'list(nx.simple_cycles(graph))'
+```
+
+`graph` is the NetworkX `DiGraph`, `nx` is the library; the expression
+is evaluated and its result emitted as JSON. If the expression returns
+a NetworkX graph (e.g. `nx.condensation(graph)`), it flows straight
+back into `visiter to-dot` for rendering. See the
+[manual's NetworkX section](manual.md#8-integrating-with-networkx) and
+[`demos/05`–`07`](../demos/) for more.
+
 ## What does the JSON Schema buy me?
 
 The graph-dict shape is formally specified as a JSON Schema (Draft

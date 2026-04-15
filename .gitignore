@@ -11,4 +11,6 @@ build/
 *.swp
 .DS_Store
 demos/out/
+CLAUDE.md
+
 

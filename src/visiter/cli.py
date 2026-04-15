@@ -49,6 +49,26 @@ visiter iterate '...' | visiter validate
 ```
 """
 
+ANALYZE_EXAMPLE = """\
+**Examples**
+
+Scalars and dicts flow through as JSON:
+
+```
+visiter iterate '...' | visiter analyze 'nx.number_of_nodes(graph)'
+visiter iterate '...' | visiter analyze 'nx.in_degree_centrality(graph)'
+```
+
+If the expression returns a NetworkX graph, it is re-emitted as a
+VisIter graph dict so the next stage can render it:
+
+```
+visiter iterate '...' \\
+  | visiter analyze 'nx.condensation(graph)' \\
+  | visiter to-dot '' | dot -Tsvg > scc.svg
+```
+"""
+
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option(__version__, "-V", "--version", prog_name="visiter")
@@ -155,6 +175,50 @@ def validate_cmd(input_path):
         sys.exit(1)
 
     click.echo(f"valid (schema v{version})")
+
+
+@cli.command("analyze", epilog=ANALYZE_EXAMPLE)
+@click.argument("argstring")
+@click.option("--input", "input_path", default="-", show_default=True,
+              help="Input JSON file ('-' for stdin).")
+def analyze_cmd(argstring, input_path):
+    """Run a NetworkX computation against a graph JSON document.
+
+    ARGSTRING is a Python expression evaluated with `graph` (a
+    `networkx.DiGraph` built from the input) and `nx` pre-bound. The
+    result is written to stdout as JSON; if it is itself a NetworkX
+    graph, it is converted back into VisIter's schema so the output
+    can flow straight into `visiter to-dot`.
+
+    Requires the [analytics] extra (networkx).
+    """
+    try:
+        import networkx as nx
+    except ImportError:
+        click.echo("visiter analyze: requires the 'networkx' package.\n"
+                   "  Install with: pip install visiter[analytics]",
+                   err=True)
+        sys.exit(2)
+
+    from .analytics import to_networkx, from_networkx
+
+    if input_path == "-":
+        doc = json.load(sys.stdin)
+    else:
+        with open(input_path) as f:
+            doc = json.load(f)
+
+    graph = to_networkx(doc)
+    ns = {"graph": graph, "nx": nx}
+    result = eval(argstring, ns)
+
+    if isinstance(result, nx.Graph):
+        payload = from_networkx(result)
+    else:
+        payload = result
+
+    json.dump(payload, sys.stdout, indent=2, default=str)
+    sys.stdout.write("\n")
 
 
 def main():
