@@ -213,39 +213,3 @@ def iterate(start, rules, *, default, max_depth=None,
         frontier = next_frontier
 
     return graph
-
-
-def main():
-    """CLI: pass iterate's argument list as a single Python expression.
-
-    The argument string is spliced into `iterate(<argstring>)` and evaluated
-    with `Rule`, `Op`, and `iterate` itself available in the namespace. The
-    resulting graph is dumped as JSON on stdout.
-
-    Example:
-        visiter iterate 'range(1, 30),
-            [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-            default=Op(lambda x: x+2, "+2")'
-    """
-    import json
-    import sys
-
-    if len(sys.argv) != 2:
-        sys.stderr.write(
-            "usage: visiter iterate 'ARGSTRING'\n"
-            "  ARGSTRING is spliced into iterate(<ARGSTRING>) and eval'd.\n"
-            "  Example:\n"
-            "    visiter iterate 'range(1, 30), "
-            "[Rule(lambda x: x%3==0, Op(lambda x: x//3, \"÷3\"))], "
-            "default=Op(lambda x: x+2, \"+2\")'\n"
-        )
-        sys.exit(2)
-
-    ns = {"Rule": Rule, "Op": Op, "iterate": iterate}
-    graph = eval(f"iterate({sys.argv[1]})", ns)
-    json.dump(graph, sys.stdout, indent=2, default=str)
-    print()
-
-
-if __name__ == "__main__":
-    main()
