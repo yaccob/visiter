@@ -16,9 +16,10 @@ def run(*args, input_=None):
 
 
 def test_top_level_version_flag():
+    from visiter import __version__
     r = run("--version")
     assert r.returncode == 0, r.stderr
-    assert "0.1.0" in r.stdout
+    assert __version__ in r.stdout
 
 
 def test_top_level_help_describes_tool_and_lists_subcommands():
