@@ -1,0 +1,267 @@
+"""Shared helpers for Graphviz-based graph rendering."""
+
+import re
+import time
+
+from sympy import factorint
+
+
+def parse_time_limit(time_limit):
+    """Convert "hh:mm:ss" string to a Unix-time deadline; None passes through."""
+    if time_limit is None:
+        return None
+    h, m, s = map(int, time_limit.split(":"))
+    return time.time() + h * 3600 + m * 60 + s
+
+
+def check_deadline(deadline, on_limit, partial_value, where):
+    """Honor a deadline either by raising or by returning `partial_value`.
+
+    Returns `partial_value` when on_limit="stop" and the deadline has
+    passed, so callers can `return check_deadline(...) or normal_path`.
+    Returns None when the deadline has not yet passed (caller continues).
+    """
+    if deadline is None or time.time() < deadline:
+        return None
+    if on_limit == "raise":
+        raise RuntimeError(f"render time_limit reached {where}")
+    return partial_value
+
+_SUP_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+# Fallback palette. Each slot is (fill_color, edge_color): a light pastel for
+# node fills (readable labels) and a more saturated variant for edges (thin
+# lines that need visibility). Legacy iterate blue/orange sit in the first two
+# slots so binary graphs keep their familiar look.
+DEFAULT_OP_PALETTE = [
+    ("#ccddff", "#6688bb"),  # blue
+    ("#ffddcc", "#ddbb99"),  # orange
+    ("#cceecc", "#77aa77"),  # green
+    ("#eeccee", "#aa77aa"),  # purple
+    ("#eeeeaa", "#aaaa66"),  # olive
+    ("#cceeee", "#77aaaa"),  # teal
+]
+_PALETTE_FALLBACK = "#888888"
+
+
+def darken(hex_color, factor=0.45):
+    """Reduce HSL lightness by `factor`, keeping hue and saturation.
+
+    HSL-based darkening preserves the color identity: a light blue stays
+    blue when darkened, instead of going grey as it would with a uniform
+    RGB scale toward black.
+    """
+    import colorsys
+
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hue, light, sat = colorsys.rgb_to_hls(r, g, b)
+    r, g, b = colorsys.hls_to_rgb(hue, light * factor, sat)
+    return "#{:02x}{:02x}{:02x}".format(round(r * 255), round(g * 255), round(b * 255))
+
+
+def _as_pair(c):
+    """Normalize a palette entry to a (fill, edge) tuple."""
+    if isinstance(c, str):
+        return (c, c)
+    fill, edge = c
+    return (fill, edge)
+
+
+def resolve_op_colors(graph, op_colors=None, palette=None):
+    """Return {op_label: (fill_color, edge_color)}.
+
+    Entries in `op_colors` may be either a single hex string (used for both
+    fill and edge) or a (fill, edge) tuple. Palette entries follow the same
+    string/tuple rule. Assignment order for unmapped ops:
+      - `graph["op_order"]` if present (rule-declaration order, set by iterate)
+      - otherwise first-seen order over `graph["edges"]`
+    When the palette is exhausted a neutral grey pair is used.
+    """
+    result = {op: _as_pair(c) for op, c in (op_colors or {}).items()}
+    palette_list = [_as_pair(p) for p in
+                    (palette if palette is not None else DEFAULT_OP_PALETTE)]
+    palette_iter = iter(palette_list)
+
+    ordered_ops = graph.get("op_order")
+    if ordered_ops is None:
+        ordered_ops = []
+        seen = set()
+        for edge in graph["edges"]:
+            op = edge["op"]
+            if op not in seen:
+                seen.add(op)
+                ordered_ops.append(op)
+
+    for op in ordered_ops:
+        if op in result:
+            continue
+        try:
+            result[op] = next(palette_iter)
+        except StopIteration:
+            result[op] = (_PALETTE_FALLBACK, _PALETTE_FALLBACK)
+    return result
+
+
+def format_prime_factors(n):
+    """Return n's prime factorization as a string like '2²·3·5'."""
+    if n < 2:
+        return str(n)
+    parts = []
+    for prime, exp in sorted(factorint(n).items()):
+        if exp == 1:
+            parts.append(str(prime))
+        else:
+            parts.append(f"{prime}{str(exp).translate(_SUP_DIGITS)}")
+    return "·".join(parts)
+
+
+def format_binary(v):
+    """Return v's binary representation grouped in 4-bit nibbles."""
+    b = bin(v)[2:] if v > 0 else "0"
+    chunks = []
+    while len(b) > 4:
+        chunks.append(b[-4:])
+        b = b[:-4]
+    chunks.append(b)
+    return "\u2009".join(reversed(chunks))
+
+
+def format_ternary(v):
+    """Return v's ternary representation grouped in 3-trit blocks.
+
+    3-trit grouping is the ternary analogue of 4-bit nibbles (base-2 → base-16):
+    each block corresponds to one base-27 digit.
+    """
+    if v <= 0:
+        return "0"
+    digits = []
+    while v > 0:
+        digits.append(str(v % 3))
+        v //= 3
+    s = "".join(reversed(digits))
+    chunks = []
+    while len(s) > 3:
+        chunks.append(s[-3:])
+        s = s[:-3]
+    chunks.append(s)
+    return "\u2009".join(reversed(chunks))
+
+
+def format_op_label(op):
+    """Format an operation string for display with Unicode operators."""
+    m = re.match(r'^/(\d+)$', op)
+    if m:
+        return f'÷{m.group(1)}'
+    m = re.match(r'^\*(\d+)$', op)
+    if m:
+        return f'×{m.group(1)}'
+    m = re.match(r'^\*(\d+)\+(\d+)$', op)
+    if m:
+        return f'×{m.group(1)} + {m.group(2)}'
+    m = re.match(r'^\*(\d+)-(\d+)$', op)
+    if m:
+        return f'×{m.group(1)} − {m.group(2)}'
+    return op
+
+
+def _label_attrs(v, show_binary, show_ternary, show_factors):
+    extras = []
+    if show_binary:
+        extras.append(format_binary(v))
+    if show_ternary:
+        extras.append(format_ternary(v))
+    if show_factors:
+        extras.append(format_prime_factors(v))
+    if extras:
+        body = "<BR/>".join(f'<FONT POINT-SIZE="8">{e}</FONT>' for e in extras)
+        return {"label": f"<{v}<BR/>{body}>"}
+    return {"label": str(v)}
+
+
+def node_attrs(v, out_op_colors, hl=False, show_binary=False, show_ternary=False,
+               show_factors=False):
+    """Build Graphviz node attributes from a value and its outgoing edges.
+
+    Fill is driven by the node's outgoing edges:
+      0 out-edges: no fill (leaf, default Graphviz white)
+      1 out-edge:  solid fill in that edge's color
+      N out-edges: wedged (pie slices) in the edges' colors, sorted by op-label
+
+    `highlight` darkens each fill color and switches the font to white.
+    """
+    attrs = _label_attrs(v, show_binary, show_ternary, show_factors)
+    colors = [darken(c) for c in out_op_colors] if hl else list(out_op_colors)
+    if len(colors) == 1:
+        attrs.update(style="filled", fillcolor=colors[0])
+    elif len(colors) >= 2:
+        attrs.update(style="wedged", fillcolor=":".join(colors))
+    if hl and colors:
+        attrs["fontcolor"] = "white"
+    return attrs
+
+
+def build_dot(graph, op_labels, edge_dir="forward",
+              show_binary=False, show_ternary=False, show_factors=False,
+              op_colors=None, palette=None, extra_out_ops=None,
+              deadline=None, on_limit="raise"):
+    """Build a Graphviz Digraph from a graph dict.
+
+    Edges are colored by operation label via `resolve_op_colors`. Nodes are
+    filled from their outgoing edges (wedged for branches).
+
+    `extra_out_ops` is an optional {node_id: set[op_label]} map of
+    additional outgoing op labels per node — used by callers that crop the
+    graph but still want the kept nodes' fill to reflect ops on edges that
+    leave the kept region (otherwise those nodes would appear unfilled).
+
+    `deadline` (Unix timestamp from `parse_time_limit`) bounds wall-clock
+    time spent in the build loops; on hit, behavior follows `on_limit`
+    ("raise" → RuntimeError, "stop" → return the partially-built dot).
+    """
+    import graphviz
+
+    dot = graphviz.Digraph(format='svg')
+    dot.attr(rankdir='TB')
+    dot.attr('node', shape='ellipse', fontsize='11')
+    dot.attr('edge', fontsize='9')
+
+    roots = {int(r) for r in graph.get("roots", [])}
+    resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
+
+    out_ops = {}
+    for edge in graph["edges"]:
+        out_ops.setdefault(str(edge["from"]), set()).add(edge["op"])
+    for src, ops in (extra_out_ops or {}).items():
+        out_ops.setdefault(src, set()).update(ops)
+
+    fallback = (_PALETTE_FALLBACK, _PALETTE_FALLBACK)
+
+    sorted_nodes = sorted(graph["nodes"].items(), key=lambda kv: int(kv[0]))
+    for vstr, info in sorted_nodes:
+        if check_deadline(deadline, on_limit, dot, "in build_dot node loop") is dot:
+            return dot
+        v = int(vstr)
+        node_id = f"n{v}"
+        hl = "highlight" in info.get("tags", [])
+        ops = sorted(out_ops.get(vstr, set()))
+        fill_colors = [resolved.get(op, fallback)[0] for op in ops]
+        attrs = node_attrs(v, fill_colors, hl=hl,
+                           show_binary=show_binary, show_ternary=show_ternary,
+                           show_factors=show_factors)
+        if v in roots:
+            attrs["penwidth"] = "3"
+        dot.node(node_id, **attrs)
+
+    sorted_edges = sorted(graph["edges"], key=lambda e: (e["from"], e["to"]))
+    for edge in sorted_edges:
+        if check_deadline(deadline, on_limit, dot, "in build_dot edge loop") is dot:
+            return dot
+        src, dst = f"n{edge['from']}", f"n{edge['to']}"
+        op = edge["op"]
+        label = op_labels.get(op, op)
+        color = resolved.get(op, fallback)[1]
+        dot.edge(src, dst, label=f" {label} ",
+                 color=color, fontcolor=color, dir=edge_dir)
+
+    return dot

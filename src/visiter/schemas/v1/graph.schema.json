@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yaccob/visiter/schemas/v1/graph.schema.json",
+  "title": "VisIter iteration graph (v1)",
+  "description": "Output shape of visiter.iterate — the documented data contract between iterate and to_dot. Keys in `nodes` are the stringified integer values; edge `from`/`to` carry the integer values themselves.\n\nVersioning policy: the schema is versioned via its URL path segment (`/v1/`). Non-breaking additions (new optional properties, new enum values) happen in-place on v1. Breaking changes (removed/renamed fields, tightened constraints, changed value shapes) ship as `/v2/graph.schema.json` with a new `$id`; v1 remains frozen. Instances MAY self-identify via the optional `schema_version` field; absence means v1 by convention.",
+  "type": "object",
+  "required": ["roots", "nodes", "edges", "pseudo_edges", "op_order"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Optional self-identification of the graph instance's schema major version. When present, must match the schema that validates it. Absence is equivalent to `\"1\"` for backward compatibility with iterate outputs that predate this field.",
+      "const": "1"
+    },
+    "roots": {
+      "description": "Seed values for the BFS, in input order. Duplicates are not filtered (iterate passes list(start) through).",
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "nodes": {
+      "description": "Map from str(value) to node metadata. The key is the decimal string of the integer value; edge endpoints reference the same value as an integer.",
+      "type": "object",
+      "propertyNames": { "pattern": "^-?(0|[1-9][0-9]*)$" },
+      "additionalProperties": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "description": "Real edges. Deduplicated on (from, to) — if two rules fire the same op from x to the same successor, only the first is recorded.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "pseudo_edges": {
+      "description": "Edges that would have fired but were suppressed by Rule.bound returning False or by max_depth halting expansion. No `to` field — the successor is not materialized. Deduplicated on (from, op).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/pseudoEdge" }
+    },
+    "op_order": {
+      "description": "Distinct op labels in declaration order: rules first (first-seen wins), then `default.label` if not already present. Drives palette assignment in to_dot.",
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["depth"],
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "description": "Minimum BFS hop count from the nearest root. Roots have depth 0.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "tags": {
+          "description": "Names of tag predicates that matched this value. Only present when non-empty. The conventional name `highlight` triggers the renderer's fill-darkening.",
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to", "op"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "integer" },
+        "to": { "type": "integer" },
+        "op": {
+          "description": "Op label — must appear in the graph's op_order.",
+          "type": "string"
+        }
+      }
+    },
+    "pseudoEdge": {
+      "type": "object",
+      "required": ["from", "op"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "integer" },
+        "op": {
+          "description": "Op label — must appear in the graph's op_order.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
