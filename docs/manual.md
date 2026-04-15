@@ -6,8 +6,9 @@
 > when you need parameter-level detail.
 
 VisIter is two functions that compose: `iterate` builds a directed graph
-from rule-based state transitions, and `to_dot` turns such a graph
-into a Graphviz Digraph for visualization. The two are connected only by
+by applying guarded rules to seed values and following reachable
+successors, and `to_dot` turns such a graph into a Graphviz Digraph
+for visualization. The two are connected only by
 a documented dict shape, so each can be used standalone.
 
 This manual walks through the data model, semantics, and common

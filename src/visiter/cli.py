@@ -53,8 +53,8 @@ visiter iterate '...' | visiter validate
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option(__version__, "-V", "--version", prog_name="visiter")
 def cli():
-    """**VisIter** — build and visualize iteration graphs from rule-based
-    state transitions.
+    """**VisIter** — build and visualize orbit graphs for discrete
+    iterations under guarded rules.
 
     The three subcommands compose via shell pipes — `iterate` builds a
     graph and writes JSON; `to-dot` reads JSON and writes Graphviz DOT;

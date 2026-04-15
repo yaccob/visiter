@@ -1,6 +1,6 @@
 # VisIter
 
-Build and visualize iteration graphs from rule-based state transitions.
+Build and visualize orbit graphs for discrete iterations under guarded rules.
 
 VisIter is a small library that does two complementary things:
 
@@ -96,6 +96,23 @@ pip install visiter[validate]
 visiter iterate '...' | visiter validate
 ```
 
+## Why VisIter?
+
+The short pitch: VisIter is **free, scriptable, Graphviz-native,
+Unix-pipe-composable orbit-graph rendering for discrete iterations
+under guarded rules** — with cutoff boundaries (bounds, depth limits,
+render crops) as a first-class visual primitive, not silent truncation.
+
+If you have a Mathematica license, `NestGraph` covers the core BFS.
+For term rewriting with equational theories, use Maude. For
+Petri-net reachability, LoLA. For generic graph analytics, NetworkX.
+For the specific combination of "Python + rule-driven reachability
+from a seed + opinionated rendering + shell pipes", the niche is
+small but real.
+
+Full honest comparison against NetworkX, NestGraph, Maude, LoLA, and
+continuous-dynamics tooling: **[docs/comparison.md](docs/comparison.md)**.
+
 ## Documentation
 
 - [docs/tutorial.md](docs/tutorial.md) — gentle introduction: what
@@ -103,6 +120,8 @@ visiter iterate '...' | visiter validate
   what the dashed arrows mean. Start here.
 - [docs/manual.md](docs/manual.md) — reference: every parameter,
   every data field, the rendering model in full, design decisions.
+- [docs/comparison.md](docs/comparison.md) — how VisIter relates to
+  other tools in the ecosystem, and when to pick something else.
 - [demos/](demos/) — runnable end-to-end examples: `make demo` writes
   SVG/PDF/DOT into `demos/out/`.
 
