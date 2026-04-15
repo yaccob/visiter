@@ -85,3 +85,103 @@ def test_to_dot_time_limit_raises():
     g = make_descent_graph()
     with pytest.raises(RuntimeError, match="time_limit"):
         to_dot(g, time_limit="00:00:00", on_limit="raise")
+
+
+# ---- value-neutral rendering ------------------------------------------------
+
+def make_string_graph():
+    # Drop trailing vowel until none remain. Pure string-valued iteration.
+    return iterate(
+        start=["banana", "garage"],
+        rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
+                    Op(lambda s: s[:-1], "drop-vowel"))],
+        default=None,
+    )
+
+
+def test_to_dot_renders_string_valued_graph():
+    g = make_string_graph()
+    src = to_dot(g).source
+    # Labels for the start values must appear in the DOT source.
+    assert "banana" in src
+    assert "garage" in src
+
+
+def test_to_dot_marks_string_valued_roots_with_bold_border():
+    g = make_string_graph()
+    src = to_dot(g).source
+    # Roots get penwidth=3; the start values are roots.
+    assert "penwidth=3" in src or 'penwidth="3"' in src
+
+
+def test_to_dot_renders_tuple_valued_graph_after_json_roundtrip():
+    import json
+    g = iterate(
+        start=[(0, 0)],
+        rules=[Rule(lambda p: p[0] < 2,
+                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    bound=lambda p: p[0] + 1 <= 2)],
+        default=None,
+    )
+    wire = json.loads(json.dumps(g, default=str))
+    src = to_dot(wire).source
+    # The CLI-style representation of (0, 0) should appear as a label.
+    assert "(0, 0)" in src
+
+
+def test_show_binary_warns_and_skips_for_non_int_values():
+    import warnings
+    g = make_string_graph()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(g, show_binary=True).source
+    assert any("show_binary" in str(w.message) for w in caught)
+    # Render still produces output.
+    assert "banana" in src
+
+
+def test_show_factors_warns_and_skips_for_non_int_values():
+    import warnings
+    g = make_string_graph()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(g, show_factors=True).source
+    assert any("show_factors" in str(w.message) for w in caught)
+    assert "banana" in src
+
+
+def test_show_ternary_warns_and_skips_for_non_int_values():
+    import warnings
+    g = make_string_graph()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(g, show_ternary=True).source
+    assert any("show_ternary" in str(w.message) for w in caught)
+    assert "banana" in src
+
+
+def test_value_range_warns_and_skips_for_non_int_values():
+    import warnings
+    g = make_string_graph()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(g, value_range=(0, 100)).source
+    assert any("value_range" in str(w.message) for w in caught)
+    # Filter was skipped → all original nodes still present.
+    assert "banana" in src and "garage" in src
+
+
+def test_int_features_still_work_after_generalisation():
+    # Sanity check: with integer-valued graphs, all int-specific features
+    # should continue to function without warnings.
+    import warnings
+    g = make_descent_graph()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(g, show_binary=True, show_factors=True,
+                     value_range=(1, 30)).source
+    # No int-feature warnings expected.
+    assert not any("show_binary" in str(w.message) or
+                   "show_factors" in str(w.message) or
+                   "value_range" in str(w.message) for w in caught)
+    assert "digraph" in src

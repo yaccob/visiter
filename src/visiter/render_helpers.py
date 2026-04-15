@@ -2,8 +2,25 @@
 
 import re
 import time
+import warnings
 
 from sympy import factorint
+
+
+def _is_int_str(s):
+    return bool(re.fullmatch(r"-?(0|[1-9][0-9]*)", s))
+
+
+def _node_id(vstr):
+    """Stable Graphviz node id derived from a string node key.
+
+    Integer-valued keys keep the historical `n<N>` form. Non-integer keys
+    get a hex-encoded `nx_<hex>` form: deterministic, collision-free, and a
+    valid Graphviz identifier without quoting.
+    """
+    if _is_int_str(vstr):
+        return f"n{vstr}"
+    return "nx_" + vstr.encode("utf-8").hex()
 
 
 def parse_time_limit(time_limit):
@@ -165,23 +182,24 @@ def format_op_label(op):
     return op
 
 
-def _label_attrs(v, show_binary, show_ternary, show_factors):
+def _label_attrs(vstr, show_binary, show_ternary, show_factors):
     extras = []
-    if show_binary:
-        extras.append(format_binary(v))
-    if show_ternary:
-        extras.append(format_ternary(v))
-    if show_factors:
-        extras.append(format_prime_factors(v))
+    int_v = int(vstr) if _is_int_str(vstr) else None
+    if show_binary and int_v is not None:
+        extras.append(format_binary(int_v))
+    if show_ternary and int_v is not None:
+        extras.append(format_ternary(int_v))
+    if show_factors and int_v is not None:
+        extras.append(format_prime_factors(int_v))
     if extras:
         body = "<BR/>".join(f'<FONT POINT-SIZE="8">{e}</FONT>' for e in extras)
-        return {"label": f"<{v}<BR/>{body}>"}
-    return {"label": str(v)}
+        return {"label": f"<{vstr}<BR/>{body}>"}
+    return {"label": vstr}
 
 
-def node_attrs(v, out_op_colors, hl=False, show_binary=False, show_ternary=False,
-               show_factors=False):
-    """Build Graphviz node attributes from a value and its outgoing edges.
+def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
+               show_ternary=False, show_factors=False):
+    """Build Graphviz node attributes from a node key and its outgoing edges.
 
     Fill is driven by the node's outgoing edges:
       0 out-edges: no fill (leaf, default Graphviz white)
@@ -189,8 +207,13 @@ def node_attrs(v, out_op_colors, hl=False, show_binary=False, show_ternary=False
       N out-edges: wedged (pie slices) in the edges' colors, sorted by op-label
 
     `highlight` darkens each fill color and switches the font to white.
+
+    Int-only annotations (`show_binary`, `show_ternary`, `show_factors`)
+    are silently skipped when `vstr` is not an integer-valued key; the
+    caller (build_dot) emits a single aggregate warning rather than one
+    per node.
     """
-    attrs = _label_attrs(v, show_binary, show_ternary, show_factors)
+    attrs = _label_attrs(vstr, show_binary, show_ternary, show_factors)
     colors = [darken(c) for c in out_op_colors] if hl else list(out_op_colors)
     if len(colors) == 1:
         attrs.update(style="filled", fillcolor=colors[0])
@@ -226,7 +249,7 @@ def build_dot(graph, op_labels, edge_dir="forward",
     dot.attr('node', shape='ellipse', fontsize='11')
     dot.attr('edge', fontsize='9')
 
-    roots = {int(r) for r in graph.get("roots", [])}
+    roots = {str(r) for r in graph.get("roots", [])}
     resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
 
     out_ops = {}
@@ -237,27 +260,46 @@ def build_dot(graph, op_labels, edge_dir="forward",
 
     fallback = (_PALETTE_FALLBACK, _PALETTE_FALLBACK)
 
-    sorted_nodes = sorted(graph["nodes"].items(), key=lambda kv: int(kv[0]))
+    # Warn once if int-only annotations were requested but the graph
+    # contains non-integer node keys; per-node logic silently skips.
+    has_non_int = any(not _is_int_str(k) for k in graph["nodes"])
+    for flag_name, flag in (("show_binary", show_binary),
+                            ("show_ternary", show_ternary),
+                            ("show_factors", show_factors)):
+        if flag and has_non_int:
+            warnings.warn(
+                f"{flag_name}=True ignored for non-integer node keys",
+                UserWarning, stacklevel=2)
+
+    # Sort: integers numerically, otherwise lexicographically. Mixed sets
+    # fall back to lexicographic to keep ordering deterministic.
+    try:
+        sorted_nodes = sorted(graph["nodes"].items(),
+                              key=lambda kv: int(kv[0]))
+    except ValueError:
+        sorted_nodes = sorted(graph["nodes"].items(), key=lambda kv: kv[0])
+
     for vstr, info in sorted_nodes:
         if check_deadline(deadline, on_limit, dot, "in build_dot node loop") is dot:
             return dot
-        v = int(vstr)
-        node_id = f"n{v}"
+        node_id = _node_id(vstr)
         hl = "highlight" in info.get("tags", [])
         ops = sorted(out_ops.get(vstr, set()))
         fill_colors = [resolved.get(op, fallback)[0] for op in ops]
-        attrs = node_attrs(v, fill_colors, hl=hl,
+        attrs = node_attrs(vstr, fill_colors, hl=hl,
                            show_binary=show_binary, show_ternary=show_ternary,
                            show_factors=show_factors)
-        if v in roots:
+        if vstr in roots:
             attrs["penwidth"] = "3"
         dot.node(node_id, **attrs)
 
-    sorted_edges = sorted(graph["edges"], key=lambda e: (e["from"], e["to"]))
+    sorted_edges = sorted(
+        graph["edges"], key=lambda e: (str(e["from"]), str(e["to"])))
     for edge in sorted_edges:
         if check_deadline(deadline, on_limit, dot, "in build_dot edge loop") is dot:
             return dot
-        src, dst = f"n{edge['from']}", f"n{edge['to']}"
+        src = _node_id(str(edge["from"]))
+        dst = _node_id(str(edge["to"]))
         op = edge["op"]
         label = op_labels.get(op, op)
         color = resolved.get(op, fallback)[1]

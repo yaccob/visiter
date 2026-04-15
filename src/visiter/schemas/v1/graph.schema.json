@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/yaccob/visiter/schemas/v1/graph.schema.json",
   "title": "VisIter iteration graph (v1)",
-  "description": "Output shape of visiter.iterate — the documented data contract between iterate and to_dot. Keys in `nodes` are the stringified integer values; edge `from`/`to` carry the integer values themselves.\n\nVersioning policy: the schema is versioned via its URL path segment (`/v1/`). Non-breaking additions (new optional properties, new enum values) happen in-place on v1. Breaking changes (removed/renamed fields, tightened constraints, changed value shapes) ship as `/v2/graph.schema.json` with a new `$id`; v1 remains frozen. Instances MAY self-identify via the optional `schema_version` field; absence means v1 by convention.",
+  "description": "Output shape of visiter.iterate — the documented data contract between iterate and to_dot.\n\nValues in an iteration graph can be any hashable Python object (integers, strings, tuples, frozensets, ...). On the JSON wire they are encoded by the producer's serialization rules: native JSON types pass through unchanged, anything else is coerced to its `str()` form (the CLI uses `json.dump(default=str)`). Node keys are always strings — `str(value)` for in-memory dicts, the same string after round-trip for native-JSON values. Edge `from`/`to` carry the JSON-encoded value itself, which can therefore be of any JSON type.\n\nVersioning policy: the schema is versioned via its URL path segment (`/v1/`). Non-breaking additions (new optional properties, new enum values) happen in-place on v1. Breaking changes (removed/renamed fields, tightened constraints, changed value shapes) ship as `/v2/graph.schema.json` with a new `$id`; v1 remains frozen. Instances MAY self-identify via the optional `schema_version` field; absence means v1 by convention.",
   "type": "object",
   "required": ["roots", "nodes", "edges", "pseudo_edges", "op_order"],
   "additionalProperties": false,
@@ -12,14 +12,14 @@
       "const": "1"
     },
     "roots": {
-      "description": "Seed values for the BFS, in input order. Duplicates are not filtered (iterate passes list(start) through).",
+      "description": "Seed values for the BFS, in input order. Duplicates are not filtered (iterate passes list(start) through). Items may be of any JSON type.",
       "type": "array",
-      "items": { "type": "integer" }
+      "items": true
     },
     "nodes": {
-      "description": "Map from str(value) to node metadata. The key is the decimal string of the integer value; edge endpoints reference the same value as an integer.",
+      "description": "Map from a string key (the node's identity, derived from str(value) on the producer side) to node metadata.",
       "type": "object",
-      "propertyNames": { "pattern": "^-?(0|[1-9][0-9]*)$" },
+      "propertyNames": { "type": "string", "minLength": 1 },
       "additionalProperties": { "$ref": "#/$defs/node" }
     },
     "edges": {
@@ -64,12 +64,9 @@
       "required": ["from", "to", "op"],
       "additionalProperties": false,
       "properties": {
-        "from": { "type": "integer" },
-        "to": { "type": "integer" },
-        "op": {
-          "description": "Op label — must appear in the graph's op_order.",
-          "type": "string"
-        }
+        "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
+        "to":   { "description": "Target value (any JSON type).", "not": { "type": "null" } },
+        "op":   { "description": "Op label — must appear in the graph's op_order.", "type": "string" }
       }
     },
     "pseudoEdge": {
@@ -77,11 +74,8 @@
       "required": ["from", "op"],
       "additionalProperties": false,
       "properties": {
-        "from": { "type": "integer" },
-        "op": {
-          "description": "Op label — must appear in the graph's op_order.",
-          "type": "string"
-        }
+        "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
+        "op":   { "description": "Op label — must appear in the graph's op_order.", "type": "string" }
       }
     }
   }

@@ -437,6 +437,17 @@ renderer's fill-darkening logic.
 all optional in the renderer's eyes — consumed if present, ignored
 otherwise.
 
+### Value types
+
+Values in an iteration graph can be any hashable Python object:
+integers, strings, tuples of hashables, frozensets, etc. `iterate`
+keys nodes by `str(value)`, so two values with the same string form
+collide. On JSON output, native JSON types pass through unchanged;
+non-native values are coerced to their `str()` form by the CLI's
+`json.dump(default=str)`. The schema reflects this by accepting any
+JSON type for edge `from`/`to` and any non-empty string for node
+keys.
+
 ### JSON Schema
 
 The authoritative machine-readable contract lives at

@@ -44,6 +44,33 @@ def test_schema_rejects_wrong_version():
     assert errs, "schema_version='2' must fail v1 validation"
 
 
+def test_string_valued_iterate_validates_against_schema():
+    # Iterate on strings: drop trailing vowel until none remain.
+    vowels = set("aeiou")
+    g = iterate(
+        start=["banana", "garage"],
+        rules=[Rule(lambda s: len(s) > 0 and s[-1] in vowels,
+                    Op(lambda s: s[:-1], "drop-vowel"))],
+        default=None,
+    )
+    Draft202012Validator(_schema()).validate(g)
+
+
+def test_tuple_valued_iterate_validates_against_schema_after_json_roundtrip():
+    # Iterate on 2D grid coordinates (tuples are hashable, str()-able).
+    # The schema applies to the JSON wire form — round-trip via json.dump
+    # with default=str (matching CLI behaviour) before validating.
+    g = iterate(
+        start=[(0, 0)],
+        rules=[Rule(lambda p: p[0] < 2,
+                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    bound=lambda p: p[0] + 1 <= 2)],
+        default=None,
+    )
+    wire = json.loads(json.dumps(g, default=str))
+    Draft202012Validator(_schema()).validate(wire)
+
+
 def test_schema_rejects_unknown_top_level_property():
     g = iterate([1], rules=[], default=Op(lambda x: x, "id"), max_nodes=2,
                 on_limit="stop")

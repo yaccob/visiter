@@ -1,8 +1,10 @@
 """Convert iteration graphs into Graphviz Digraph objects (DOT)."""
 
+import warnings
+
 from .render_helpers import (build_dot, check_deadline, format_op_label,
                              parse_time_limit, resolve_op_colors,
-                             _PALETTE_FALLBACK)
+                             _PALETTE_FALLBACK, _is_int_str, _node_id)
 
 
 def _bfs_neighborhood(graph, anchor, radius, direction):
@@ -100,8 +102,13 @@ def to_dot(graph, *, op_labels=None,
         keep = _bfs_neighborhood(graph, anchor, radius, direction)
     if value_range is not None:
         lo, hi = value_range
-        range_set = {v for v in graph["nodes"] if lo <= int(v) <= hi}
-        keep = range_set if keep is None else keep & range_set
+        if all(_is_int_str(k) for k in graph["nodes"]):
+            range_set = {v for v in graph["nodes"] if lo <= int(v) <= hi}
+            keep = range_set if keep is None else keep & range_set
+        else:
+            warnings.warn(
+                "value_range ignored for graphs with non-integer node keys",
+                UserWarning, stacklevel=2)
 
     # Each entry: (kept_node_id, op_label, kept_is_src)
     #   kept_is_src=True  → outgoing cut (or pseudo-edge): kept_src → ghost
@@ -153,7 +160,8 @@ def to_dot(graph, *, op_labels=None,
         edge_label = effective_labels.get(op, op)
         color = resolved.get(op, (_PALETTE_FALLBACK, _PALETTE_FALLBACK))[1]
         dot.node(ghost_id, label="", shape="none", width="0", height="0")
-        endpoints = (f"n{kept}", ghost_id) if kept_is_src else (ghost_id, f"n{kept}")
+        kept_id = _node_id(kept)
+        endpoints = (kept_id, ghost_id) if kept_is_src else (ghost_id, kept_id)
         dot.edge(*endpoints, label=f" {edge_label} ", style="dashed",
                  color=color, fontcolor=color, arrowhead="normal")
 
