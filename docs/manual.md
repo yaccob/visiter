@@ -1,5 +1,10 @@
 # VisIter Manual
 
+> **First time here?** This manual is a reference. If you'd rather
+> start with motivation, a small example, and a build-up of concepts,
+> read [tutorial.md](tutorial.md) first and come back to the manual
+> when you need parameter-level detail.
+
 VisIter is two functions that compose: `iterate` builds a directed graph
 from rule-based state transitions, and `to_dot` turns such a graph
 into a Graphviz Digraph for visualization. The two are connected only by

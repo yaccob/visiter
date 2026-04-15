@@ -98,8 +98,13 @@ visiter iterate '...' | visiter validate
 
 ## Documentation
 
-- [docs/manual.md](docs/manual.md) — full API reference and concepts:
-  rule semantics, depth/bound/pseudo-edges, ghost stubs, color model.
+- [docs/tutorial.md](docs/tutorial.md) — gentle introduction: what
+  problem the tool solves, smallest example, what each piece does,
+  what the dashed arrows mean. Start here.
+- [docs/manual.md](docs/manual.md) — reference: every parameter,
+  every data field, the rendering model in full, design decisions.
+- [demos/](demos/) — runnable end-to-end examples: `make demo` writes
+  SVG/PDF/DOT into `demos/out/`.
 
 ## License
 

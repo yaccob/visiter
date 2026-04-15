@@ -10,3 +10,5 @@ build/
 .ruff_cache/
 *.swp
 .DS_Store
+demos/out/
+
