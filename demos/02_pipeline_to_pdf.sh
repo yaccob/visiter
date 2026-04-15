@@ -3,8 +3,9 @@
 # layout + format conversion. Two output formats demonstrate that the
 # downstream stage is just a Graphviz invocation.
 set -euo pipefail
-cd "$(dirname "$0")"
-mkdir -p out
+HERE="$(dirname "$0")"
+OUT="$HERE/out"
+mkdir -p "$OUT"
 
 # Reverse binary tree: from 1, doubling and double-plus-one until 64.
 EXPR='start=[1], rules=[
@@ -16,10 +17,10 @@ EXPR='start=[1], rules=[
 
 visiter iterate "$EXPR" \
   | visiter to-dot 'show_binary=True' \
-  | tee out/binary_tree.dot \
-  | dot -Tsvg -o out/binary_tree.svg
-echo "wrote out/binary_tree.svg"
+  | tee "$OUT/binary_tree.dot" \
+  | dot -Tsvg -o "$OUT/binary_tree.svg"
+echo "wrote $OUT/binary_tree.svg"
 
 # Same data, PDF instead of SVG.
-dot -Tpdf out/binary_tree.dot -o out/binary_tree.pdf
-echo "wrote out/binary_tree.pdf"
+dot -Tpdf "$OUT/binary_tree.dot" -o "$OUT/binary_tree.pdf"
+echo "wrote $OUT/binary_tree.pdf"

@@ -47,11 +47,36 @@ def test_demo_runs(script, tmp_path):
     (work_demos / "out").mkdir(exist_ok=True)
     env = os.environ.copy()
     env["PATH"] = AUGMENTED_PATH
-    result = subprocess.run(["bash", str(work_demos / script.name)],
-                            env=env, capture_output=True, text=True)
+    # Invoke the demo with a *relative* path from tmp_path so printed
+    # output paths must themselves be relative to the caller's cwd
+    # (not absolute, not relative-to-script).
+    rel_script = os.path.relpath(work_demos / script.name, start=tmp_path)
+    result = subprocess.run(["bash", rel_script],
+                            env=env, cwd=str(tmp_path),
+                            capture_output=True, text=True)
     assert result.returncode == 0, (
         f"demo failed: {script.name}\n"
         f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     # Each demo prints at least one "wrote …" line.
     assert "wrote" in result.stdout
+
+    # Every path mentioned on a "wrote …" line must
+    #   (a) be relative (not absolute — user called with a relative
+    #       script path, so output paths should match that style), and
+    #   (b) resolve from the caller's cwd.
+    for line in result.stdout.splitlines():
+        if not line.startswith("wrote "):
+            continue
+        path_token = line.split(None, 2)[1]
+        assert not os.path.isabs(path_token), (
+            f"{script.name} reported 'wrote {path_token}' as an absolute "
+            f"path, but the caller invoked the demo via a relative path; "
+            f"output paths should be relative to the caller's cwd."
+        )
+        candidate = os.path.join(str(tmp_path), path_token)
+        assert os.path.exists(candidate), (
+            f"{script.name} reported 'wrote {path_token}' but the path "
+            f"does not resolve from the caller's cwd "
+            f"({tmp_path}); got: {candidate}"
+        )

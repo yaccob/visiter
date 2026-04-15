@@ -4,8 +4,9 @@
 # are leaves. Demonstrates that `iterate`'s value type can be any
 # hashable, str()-able Python object.
 set -euo pipefail
-cd "$(dirname "$0")"
-mkdir -p out
+HERE="$(dirname "$0")"
+OUT="$HERE/out"
+mkdir -p "$OUT"
 
 EXPR='start=["banana", "garage", "queue", "iterator"],
 rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
@@ -14,5 +15,5 @@ default=None'
 
 visiter iterate "$EXPR" \
   | visiter to-dot '' \
-  | dot -Tsvg -o out/words.svg
-echo "wrote out/words.svg (string-valued iteration)"
+  | dot -Tsvg -o "$OUT/words.svg"
+echo "wrote $OUT/words.svg (string-valued iteration)"

@@ -5,27 +5,31 @@
 #   (c) full graph with custom op_colors
 # All three views share the same input data (descent.json), proving
 # that iterate and to_dot are decoupled by the documented graph dict.
+#
+# Paths printed below are relative to the caller's cwd when the script
+# itself was invoked relatively, so the output is copy-pasteable.
 set -euo pipefail
-cd "$(dirname "$0")"
-mkdir -p out
+HERE="$(dirname "$0")"
+OUT="$HERE/out"
+mkdir -p "$OUT"
 
-DATA="out/descent.json"
-EXPR="$(cat data/descent.expr)"
+DATA="$OUT/descent.json"
+EXPR="$(cat "$HERE/data/descent.expr")"
 
 visiter iterate "$EXPR" > "$DATA"
 echo "wrote $DATA"
 
 visiter to-dot 'anchor=1, radius=10, direction="backward"' \
-  < "$DATA" > out/descent_full.dot
-dot -Tsvg out/descent_full.dot -o out/descent_full.svg
-echo "wrote out/descent_full.svg"
+  < "$DATA" > "$OUT/descent_full.dot"
+dot -Tsvg "$OUT/descent_full.dot" -o "$OUT/descent_full.svg"
+echo "wrote $OUT/descent_full.svg"
 
 visiter to-dot 'anchor=1, radius=2, direction="backward"' \
-  < "$DATA" > out/descent_tight.dot
-dot -Tsvg out/descent_tight.dot -o out/descent_tight.svg
-echo "wrote out/descent_tight.svg (tight crop — note the ghost stubs)"
+  < "$DATA" > "$OUT/descent_tight.dot"
+dot -Tsvg "$OUT/descent_tight.dot" -o "$OUT/descent_tight.svg"
+echo "wrote $OUT/descent_tight.svg (tight crop — note the ghost stubs)"
 
 visiter to-dot 'op_colors={"÷3": "#a83232", "+2": "#3266a8"}' \
-  < "$DATA" > out/descent_recolored.dot
-dot -Tsvg out/descent_recolored.dot -o out/descent_recolored.svg
-echo "wrote out/descent_recolored.svg (custom palette)"
+  < "$DATA" > "$OUT/descent_recolored.dot"
+dot -Tsvg "$OUT/descent_recolored.dot" -o "$OUT/descent_recolored.svg"
+echo "wrote $OUT/descent_recolored.svg (custom palette)"
