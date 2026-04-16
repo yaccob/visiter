@@ -40,6 +40,8 @@ except ImportError as _exc:  # pragma: no cover - surfaced as ImportError
         "Install with: pip install visiter[analytics]"
     ) from _exc
 
+from .iteration import json_type
+
 
 def _coerce_json_friendly(value):
     """Turn NX-typical non-JSON types into JSON-serialisable ones.
@@ -127,9 +129,15 @@ def from_networkx(g):
         entry = {}
         for k, v in attrs.items():
             entry[k] = _coerce_json_friendly(v)
-        # Ensure depth is present — schema requires it.
+        # Schema requires depth; supply a neutral default when the NX
+        # graph doesn't carry one (typical for bare, non-visiter inputs).
         if "depth" not in entry:
             entry["depth"] = 0
+        # Schema requires key_type. Prefer a preserved attribute; fall
+        # back to inferring it from the JSON type of the NX node id —
+        # that's the only honest signal we have for bare NX graphs.
+        if "key_type" not in entry:
+            entry["key_type"] = json_type(n)
         if "tags" in entry and not isinstance(entry["tags"], list):
             entry["tags"] = list(entry["tags"])
         nodes[str(n)] = entry

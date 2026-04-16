@@ -4,11 +4,11 @@
   "title": "VisIter iteration graph (v1)",
   "description": "Output shape of visiter.iterate — the documented data contract between iterate and to_dot.\n\nValues in an iteration graph can be any hashable Python object (integers, strings, tuples, frozensets, ...). On the JSON wire they are encoded by the producer's serialization rules: native JSON types pass through unchanged, anything else is coerced to its `str()` form (the CLI uses `json.dump(default=str)`). Node keys are always strings — `str(value)` for in-memory dicts, the same string after round-trip for native-JSON values. Edge `from`/`to` carry the JSON-encoded value itself, which can therefore be of any JSON type.\n\nVersioning policy: the schema is versioned via its URL path segment (`/v1/`). Non-breaking additions (new optional properties, new enum values) happen in-place on v1. Breaking changes (removed/renamed fields, tightened constraints, changed value shapes) ship as `/v2/graph.schema.json` with a new `$id`; v1 remains frozen. Instances MAY self-identify via the optional `schema_version` field; absence means v1 by convention.",
   "type": "object",
-  "required": ["roots", "nodes", "edges", "pseudo_edges", "op_order"],
+  "required": ["schema_version", "roots", "nodes", "edges", "pseudo_edges", "op_order"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "description": "Optional self-identification of the graph instance's schema major version. When present, must match the schema that validates it. Absence is equivalent to `\"1\"` for backward compatibility with iterate outputs that predate this field.",
+      "description": "Self-identification of the graph instance's schema major version. Must equal `\"1\"` for documents conforming to this schema; producers of future v2 documents will emit `\"2\"` and be validated by `/v2/graph.schema.json`.",
       "const": "1"
     },
     "roots": {
@@ -42,13 +42,18 @@
   "$defs": {
     "node": {
       "type": "object",
-      "required": ["depth"],
+      "required": ["depth", "key_type"],
       "additionalProperties": true,
       "properties": {
         "depth": {
           "description": "Minimum BFS hop count from the nearest root. Roots have depth 0.",
           "type": "integer",
           "minimum": 0
+        },
+        "key_type": {
+          "description": "JSON-native type of the original node value before JSON stringification. One of the seven JSON Schema primitives (`null`, `boolean`, `integer`, `number`, `string`, `array`, `object`) so consumers in any language can interpret it without Python-specific knowledge. Drives type-sensitive rendering (e.g. skipping `show_factors` for non-integer values) instead of inferring type from the string form of the key. Python-side mapping: `bool` → `boolean`, `int` → `integer`, `float` → `number`, `str` → `string`, `list`/`tuple`/`set`/`frozenset` → `array`, `dict` → `object`, `None` → `null`; anything else is coerced to `string` via the default `str()` JSON encoder.",
+          "type": "string",
+          "enum": ["null", "boolean", "integer", "number", "string", "array", "object"]
         },
         "tags": {
           "description": "Names of tag predicates that matched this value. Only present when non-empty. The conventional name `highlight` triggers the renderer's fill-darkening.",

@@ -44,6 +44,77 @@ def test_schema_rejects_wrong_version():
     assert errs, "schema_version='2' must fail v1 validation"
 
 
+def test_iterate_emits_key_type_integer_for_integer_seeds():
+    g = iterate(
+        start=range(1, 5),
+        rules=[Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, "÷2"))],
+        default=Op(lambda x: x + 1, "+1"),
+    )
+    for key, info in g["nodes"].items():
+        assert info["key_type"] == "integer", f"node {key}: {info}"
+
+
+def test_iterate_emits_key_type_string_for_string_seeds():
+    vowels = set("aeiou")
+    g = iterate(
+        start=["banana", "garage"],
+        rules=[Rule(lambda s: len(s) > 0 and s[-1] in vowels,
+                    Op(lambda s: s[:-1], "drop-vowel"))],
+        default=None,
+    )
+    for key, info in g["nodes"].items():
+        assert info["key_type"] == "string"
+
+
+def test_iterate_emits_key_type_array_for_tuple_seeds():
+    # JSON has no tuple type; tuples map to the "array" JSON primitive.
+    g = iterate(
+        start=[(0, 0)],
+        rules=[Rule(lambda p: p[0] < 2,
+                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    bound=lambda p: p[0] + 1 <= 2)],
+        default=None,
+    )
+    for key, info in g["nodes"].items():
+        assert info["key_type"] == "array"
+
+
+def test_iterate_emits_key_type_boolean_not_integer():
+    # bool is a subclass of int in Python — the JSON mapping must
+    # dispatch bool BEFORE int so booleans show as "boolean".
+    g = iterate([True], rules=[], default=None)
+    assert g["nodes"]["True"]["key_type"] == "boolean"
+
+
+def test_schema_restricts_key_type_to_json_primitives():
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+                max_nodes=3, on_limit="stop")
+    # A Python-specific name like "int" must NOT validate.
+    for info in g["nodes"].values():
+        info["key_type"] = "int"
+    errors = list(Draft202012Validator(_schema()).iter_errors(g))
+    assert errors, "key_type='int' (Python name) must fail validation"
+
+
+def test_schema_requires_key_type_on_every_node():
+    # An otherwise-valid doc without key_type must fail validation.
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+                max_nodes=3, on_limit="stop")
+    # Strip key_type to simulate a doc missing the field.
+    for info in g["nodes"].values():
+        del info["key_type"]
+    errors = list(Draft202012Validator(_schema()).iter_errors(g))
+    assert errors, "schema should reject nodes without key_type"
+
+
+def test_schema_requires_schema_version_at_top_level():
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+                max_nodes=3, on_limit="stop")
+    del g["schema_version"]
+    errors = list(Draft202012Validator(_schema()).iter_errors(g))
+    assert errors, "schema should reject docs without schema_version"
+
+
 def test_string_valued_iterate_validates_against_schema():
     # Iterate on strings: drop trailing vowel until none remain.
     vowels = set("aeiou")

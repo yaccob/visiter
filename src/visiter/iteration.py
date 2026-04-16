@@ -6,6 +6,37 @@ Rule = namedtuple("Rule", ["condition", "op", "bound"])
 Rule.__new__.__defaults__ = (None,)
 
 
+def json_type(x):
+    """Return the JSON Schema type name for a Python value.
+
+    Maps Python types to the seven JSON primitives
+    (``null``, ``boolean``, ``integer``, ``number``, ``string``,
+    ``array``, ``object``) so the graph-dict's ``key_type`` field is
+    language-neutral: any JSON consumer understands it without
+    Python-specific knowledge.
+
+    Order matters: ``bool`` must be checked before ``int`` because
+    Python's ``bool`` is a subclass of ``int``.
+    """
+    if x is None:
+        return "null"
+    if isinstance(x, bool):
+        return "boolean"
+    if isinstance(x, int):
+        return "integer"
+    if isinstance(x, float):
+        return "number"
+    if isinstance(x, str):
+        return "string"
+    if isinstance(x, (list, tuple, set, frozenset)):
+        return "array"
+    if isinstance(x, dict):
+        return "object"
+    # Anything else goes through default=str in JSON output → treat
+    # as string for round-trip purposes.
+    return "string"
+
+
 def parse_range(s):
     """Parse a comma-separated range string like '1-5,8,11-13' into a list of ints.
 
@@ -123,7 +154,7 @@ def iterate(start, rules, *, default, max_depth=None,
     seen_pseudo = set()
 
     def make_node(x, depth):
-        info = {"depth": depth}
+        info = {"depth": depth, "key_type": json_type(x)}
         node_tags = [name for name, fn in tags.items() if fn(x)]
         if node_tags:
             info["tags"] = node_tags

@@ -99,10 +99,13 @@ iterate(start, rules, *, default,
 
 ```python
 {
+    "schema_version": "1",             # always set by iterate
     "roots":         [int, ...],       # starts, in input order
     "nodes":         {str(value): {
-                          "depth": int,        # min BFS hops from any start
-                          "tags":  [str, ...]  # if any tag predicate matched
+                          "depth":    int,        # min BFS hops from any start
+                          "key_type": str,        # JSON type: "integer",
+                                                  # "string", "array", ...
+                          "tags":     [str, ...], # if any tag predicate matched
                       }, ...},
     "edges":         [{"from": A, "to": B, "op": label}, ...],
     "pseudo_edges":  [{"from": A,           "op": label}, ...],
@@ -433,8 +436,12 @@ renderer's fill-darkening logic.
 
     "nodes": {
         str(value): {
-            "depth": int,            # required: BFS distance from nearest start
-            "tags":  [str, ...],     # optional: present iff at least one tag matched
+            "depth":    int,            # required: BFS distance from nearest start
+            "key_type": str,            # required: JSON type of the value
+                                        #   (one of "null", "boolean", "integer",
+                                        #   "number", "string", "array", "object")
+                                        #   — drives type-sensitive rendering
+            "tags":     [str, ...],     # optional: present iff at least one tag matched
         },
         ...
     },
@@ -467,6 +474,22 @@ non-native values are coerced to their `str()` form by the CLI's
 `json.dump(default=str)`. The schema reflects this by accepting any
 JSON type for edge `from`/`to` and any non-empty string for node
 keys.
+
+To let consumers recover the type of a node value despite JSON's
+string-keys constraint, `iterate` records it explicitly as a
+required `key_type` attribute on each node — using the seven
+JSON Schema primitives (`null`, `boolean`, `integer`, `number`,
+`string`, `array`, `object`) so any JSON consumer can interpret it
+without Python-specific knowledge. The Python → JSON mapping is:
+`bool` → `boolean`, `int` → `integer`, `float` → `number`, `str` →
+`string`, `list`/`tuple`/`set`/`frozenset` → `array`, `dict` →
+`object`, `None` → `null`; anything else falls back to `string` via
+the default `str()` coercion. The renderer consults `key_type`
+directly when deciding whether type-sensitive features
+(`show_binary`, `show_ternary`, `show_factors`, `value_range`)
+should fire — no string-pattern heuristic is involved. Hand-built
+graph dicts and producers other than `iterate` must supply
+`key_type` themselves; the schema enforces this via `required`.
 
 ### JSON Schema
 
@@ -536,13 +559,17 @@ dot = to_dot(from_networkx(condensation))
 
 `to_networkx` preserves node keys (as strings — this is the only
 identity the graph dict actually guarantees) and every node
-attribute, not only the schema-defined `depth` and `tags`. Edge
+attribute, including `depth`, `tags`, and `key_type`. Edge
 attributes (`op`) pass through as well. Top-level fields (`roots`,
 `pseudo_edges`, `op_order`, `schema_version`) are stashed on
 `nx.DiGraph.graph` so `from_networkx` can reproduce the original
-dict exactly. Round-trip is information-preserving for VisIter graphs;
-for bare NetworkX graphs without VisIter metadata you get a minimal
-but schema-valid result.
+dict exactly. Round-trip is information-preserving for VisIter graphs.
+
+For bare NetworkX graphs without VisIter metadata you still get a
+minimal, schema-valid result: missing `depth` defaults to 0, and
+`key_type` is inferred from the JSON type of the NX node id — that's
+the only honest signal available when the producer didn't set it
+explicitly.
 
 **Attribute pass-through** is what lets NX algorithms that annotate
 nodes stay useful on our side. `nx.condensation`, for instance,

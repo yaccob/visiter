@@ -83,7 +83,10 @@ def test_from_networkx_of_bare_graph_works():
     g.add_edge("a", "b", op="step")
 
     out = from_networkx(g)
-    assert out["nodes"] == {"a": {"depth": 0}, "b": {"depth": 1}}
+    assert out["nodes"] == {
+        "a": {"depth": 0, "key_type": "string"},
+        "b": {"depth": 1, "key_type": "string"},
+    }
     assert out["edges"] == [{"from": "a", "to": "b", "op": "step"}]
     assert out["pseudo_edges"] == []
     # roots default to empty when not provided.
@@ -151,6 +154,39 @@ def test_condensation_members_reach_graph_dict():
         assert isinstance(info["members"], list)
 
 
+def test_from_networkx_infers_key_type_from_node_id_type():
+    # Bare NX graph with int node ids → from_networkx infers "integer".
+    g = nx.DiGraph()
+    g.add_node(0, depth=0)
+    g.add_node(1, depth=1)
+    g.add_edge(0, 1, op="step")
+
+    out = from_networkx(g)
+    assert out["nodes"]["0"]["key_type"] == "integer"
+    assert out["nodes"]["1"]["key_type"] == "integer"
+
+
+def test_from_networkx_preserves_key_type_over_inference():
+    # When the nx graph already carries a key_type attribute (e.g.
+    # via to_networkx), it wins over type-of-node-id inference.
+    g = nx.DiGraph()
+    g.add_node("42", depth=0, key_type="string")  # deliberately not "integer"
+    out = from_networkx(g)
+    assert out["nodes"]["42"]["key_type"] == "string"
+
+
+def test_roundtrip_preserves_key_type():
+    vg = iterate(start=["hi"],
+                 rules=[Rule(lambda s: len(s) > 0,
+                             Op(lambda s: s[:-1], "chop"))],
+                 default=None, max_nodes=5, on_limit="stop")
+    assert all(info["key_type"] == "string" for info in vg["nodes"].values())
+
+    round_tripped = from_networkx(to_networkx(vg))
+    for key, info in vg["nodes"].items():
+        assert round_tripped["nodes"][key]["key_type"] == info["key_type"]
+
+
 def test_schema_allows_extra_node_attributes():
     jsonschema_module = pytest.importorskip("jsonschema")
     from importlib.resources import files
@@ -161,7 +197,7 @@ def test_schema_allows_extra_node_attributes():
     doc = {
         "schema_version": "1",
         "roots": [],
-        "nodes": {"0": {"depth": 0, "members": ["1", "3"], "score": 0.42}},
+        "nodes": {"0": {"depth": 0, "key_type": "integer", "members": ["1", "3"], "score": 0.42}},
         "edges": [],
         "pseudo_edges": [],
         "op_order": [],

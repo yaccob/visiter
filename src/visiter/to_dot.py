@@ -4,7 +4,7 @@ import warnings
 
 from .render_helpers import (build_dot, check_deadline, format_op_label,
                              parse_time_limit, resolve_op_colors,
-                             _PALETTE_FALLBACK, _is_int_str, _node_id)
+                             _PALETTE_FALLBACK, _node_id)
 
 
 def _bfs_neighborhood(graph, anchor, radius, direction):
@@ -110,7 +110,9 @@ def to_dot(graph, *, op_labels=None,
         keep = _bfs_neighborhood(graph, anchor, radius, direction)
     if value_range is not None:
         lo, hi = value_range
-        if all(_is_int_str(k) for k in graph["nodes"]):
+        all_int = all(info["key_type"] == "integer"
+                      for info in graph["nodes"].values())
+        if all_int:
             range_set = {v for v in graph["nodes"] if lo <= int(v) <= hi}
             keep = range_set if keep is None else keep & range_set
         else:

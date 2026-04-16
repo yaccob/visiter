@@ -176,8 +176,8 @@ def test_node_label_attr_renders_attribute_as_label():
         "schema_version": "1",
         "roots": [],
         "nodes": {
-            "0": {"depth": 0, "members": ["1", "3"]},
-            "1": {"depth": 1, "members": ["2", "4", "6"]},
+            "0": {"depth": 0, "key_type": "integer", "members": ["1", "3"]},
+            "1": {"depth": 1, "key_type": "integer", "members": ["2", "4", "6"]},
         },
         "edges": [{"from": 0, "to": 1, "op": "collapse"}],
         "pseudo_edges": [],
@@ -196,8 +196,8 @@ def test_node_label_attr_scalar_value_renders_as_plain_str():
         "schema_version": "1",
         "roots": [],
         "nodes": {
-            "x": {"depth": 0, "score": 0.42},
-            "y": {"depth": 1, "score": 1},
+            "x": {"depth": 0, "key_type": "string", "score": 0.42},
+            "y": {"depth": 1, "key_type": "string", "score": 1},
         },
         "edges": [],
         "pseudo_edges": [],
@@ -214,7 +214,7 @@ def test_node_label_attr_missing_attribute_falls_back_to_node_key():
     graph = {
         "schema_version": "1",
         "roots": [],
-        "nodes": {"alpha": {"depth": 0}},  # no "members" attr
+        "nodes": {"alpha": {"depth": 0, "key_type": "string"}},  # no "members" attr
         "edges": [],
         "pseudo_edges": [],
         "op_order": [],
@@ -230,6 +230,50 @@ def test_default_label_is_node_key_when_no_attr_given():
     src = to_dot(g).source
     # Some integer node key should appear as a label verbatim.
     assert 'label=1' in src or 'label="1"' in src
+
+
+def test_show_factors_follows_key_type_not_string_pattern():
+    # A node whose key happens to look like an integer but whose
+    # key_type says otherwise must NOT receive int-only annotations.
+    graph = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {
+            "42": {"depth": 0, "key_type": "string"},
+        },
+        "edges": [],
+        "pseudo_edges": [],
+        "op_order": [],
+    }
+    import warnings
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(graph, show_factors=True).source
+    # Warning must fire because this is not an int-keyed graph.
+    assert any("show_factors" in str(w.message) for w in caught)
+    # The factorization "2·3·7" (for 42) must not be in the output.
+    assert "2·3·7" not in src
+    assert "2&middot;3&middot;7" not in src
+
+
+def test_value_range_follows_key_type_not_string_pattern():
+    graph = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {
+            "42": {"depth": 0, "key_type": "string"},
+        },
+        "edges": [],
+        "pseudo_edges": [],
+        "op_order": [],
+    }
+    import warnings
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        src = to_dot(graph, value_range=(0, 100)).source
+    assert any("value_range" in str(w.message) for w in caught)
+    # "42" still rendered (filter was skipped, not applied).
+    assert "42" in src
 
 
 def test_int_features_still_work_after_generalisation():

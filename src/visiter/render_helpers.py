@@ -199,9 +199,10 @@ def format_op_label(op):
     return op
 
 
-def _label_attrs(vstr, display, show_binary, show_ternary, show_factors):
+def _label_attrs(vstr, display, is_int_key,
+                 show_binary, show_ternary, show_factors):
     extras = []
-    int_v = int(vstr) if _is_int_str(vstr) else None
+    int_v = int(vstr) if is_int_key else None
     if show_binary and int_v is not None:
         extras.append(format_binary(int_v))
     if show_ternary and int_v is not None:
@@ -215,7 +216,8 @@ def _label_attrs(vstr, display, show_binary, show_ternary, show_factors):
 
 
 def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
-               show_ternary=False, show_factors=False, display=None):
+               show_ternary=False, show_factors=False, display=None,
+               is_int_key=False):
     """Build Graphviz node attributes from a node key and its outgoing edges.
 
     Fill is driven by the node's outgoing edges:
@@ -231,6 +233,7 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
     per node.
     """
     attrs = _label_attrs(vstr, display if display is not None else vstr,
+                         is_int_key,
                          show_binary, show_ternary, show_factors)
     colors = [darken(c) for c in out_op_colors] if hl else list(out_op_colors)
     if len(colors) == 1:
@@ -280,7 +283,8 @@ def build_dot(graph, op_labels, edge_dir="forward",
 
     # Warn once if int-only annotations were requested but the graph
     # contains non-integer node keys; per-node logic silently skips.
-    has_non_int = any(not _is_int_str(k) for k in graph["nodes"])
+    has_non_int = any(info["key_type"] != "integer"
+                      for info in graph["nodes"].values())
     for flag_name, flag in (("show_binary", show_binary),
                             ("show_ternary", show_ternary),
                             ("show_factors", show_factors)):
@@ -289,12 +293,14 @@ def build_dot(graph, op_labels, edge_dir="forward",
                 f"{flag_name}=True ignored for non-integer node keys",
                 UserWarning, stacklevel=2)
 
-    # Sort: integers numerically, otherwise lexicographically. Mixed sets
-    # fall back to lexicographic to keep ordering deterministic.
-    try:
+    # Sort: all-int graphs numerically, otherwise lexicographically
+    # for deterministic ordering.
+    all_int = all(info["key_type"] == "integer"
+                  for info in graph["nodes"].values())
+    if all_int:
         sorted_nodes = sorted(graph["nodes"].items(),
                               key=lambda kv: int(kv[0]))
-    except ValueError:
+    else:
         sorted_nodes = sorted(graph["nodes"].items(), key=lambda kv: kv[0])
 
     for vstr, info in sorted_nodes:
@@ -307,9 +313,11 @@ def build_dot(graph, op_labels, edge_dir="forward",
         display = None
         if node_label_attr is not None and node_label_attr in info:
             display = _format_label_value(info[node_label_attr])
+        is_int_key = info["key_type"] == "integer"
         attrs = node_attrs(vstr, fill_colors, hl=hl,
                            show_binary=show_binary, show_ternary=show_ternary,
-                           show_factors=show_factors, display=display)
+                           show_factors=show_factors, display=display,
+                           is_int_key=is_int_key)
         if vstr in roots:
             attrs["penwidth"] = "3"
         dot.node(node_id, **attrs)
