@@ -46,7 +46,7 @@ def _bfs_neighborhood(graph, anchor, radius, direction):
 
 
 def to_dot(graph, *, op_labels=None,
-                 anchor=None, radius=None, direction="backward",
+                 anchor=None, radius=None, direction="forward",
                  value_range=None,
                  op_colors=None, palette=None,
                  show_binary=False, show_ternary=False, show_factors=False,
@@ -61,10 +61,13 @@ def to_dot(graph, *, op_labels=None,
         anchor, radius, direction: if `anchor` and `radius` are given, only
             nodes within `radius` BFS hops of `anchor` are rendered.
             `direction` selects how edges are followed during BFS:
-              "forward"  — along edges (src → dst)
-              "backward" — against edges (default; matches the common "show
-                           nodes that reach the anchor" intent)
-              "both"     — undirected neighborhood
+              "forward"  — along edges (src → dst); default. Matches
+                           the "show me the orbit from x" reading that
+                           aligns with the iteration's own direction.
+              "backward" — against edges. Matches the "show me what
+                           reaches this anchor" reading (natural when
+                           anchoring on a sink or fixed point).
+              "both"     — undirected neighborhood.
             `anchor` is a node value as it appears in graph["nodes"] keys.
         value_range: optional (low, high) int tuple; only nodes with integer
             value in [low, high] are rendered. Combines with anchor/radius

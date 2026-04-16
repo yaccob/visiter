@@ -199,7 +199,7 @@ graph = iterate(
 
 ```python
 to_dot(graph, *, op_labels=None,
-             anchor=None, radius=None, direction="backward",
+             anchor=None, radius=None, direction="forward",
              value_range=None,
              op_colors=None, palette=None,
              show_binary=False, show_ternary=False, show_factors=False,
@@ -220,10 +220,11 @@ Returns a `graphviz.Digraph`. Caller decides what to do with it
   domain knowledge the renderer can't infer (e.g., `"/3"` → `"−1, ÷3"`).
 - `anchor`, `radius`, `direction`: BFS neighborhood crop. Only nodes
   within `radius` hops of `anchor` are rendered. `direction` ∈
-  `{"forward", "backward", "both"}`. Default `"backward"` matches the
-  common "show what reaches the anchor" intent (forward-iteration with
-  an anchor on the cycle). For trees rooted at the start, use
-  `direction="forward"` (or `"both"`).
+  `{"forward", "backward", "both"}`. Default `"forward"` — walks edges
+  in their iteration direction and answers "what does the orbit from
+  `anchor` look like?". Use `"backward"` to answer "what reaches
+  `anchor`?" (natural when the anchor is a sink or fixed point), and
+  `"both"` for an undirected neighborhood.
 - `value_range`: `(low, high)` int tuple. Combines with anchor/radius
   by intersection.
 - `op_colors`: optional `{op: color}` map. Each value may be a single
