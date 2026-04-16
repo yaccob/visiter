@@ -301,6 +301,20 @@ dot = to_dot(graph,
     })
 ```
 
+### Visual vocabulary at a glance
+
+Quick reference for what each rendered element means. Skim this once,
+keep it in mind when reading SVGs:
+
+| element                            | meaning                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Bold border** (`penwidth=3`)     | node is in `graph["roots"]` — a seed value passed to `iterate`                                  |
+| **No fill (white)**                | leaf: zero outgoing edges — iteration terminates here                                            |
+| **Solid fill**                     | exactly one outgoing op label; fill = that op's color                                            |
+| **Wedged-pie fill**                | ≥2 distinct outgoing op labels; one slice per op                                                 |
+| **Darkened fill + white font**     | node carries the `"highlight"` tag (set by a predicate in `iterate(..., tags={...})`)            |
+| **Dashed edge to a tiny target**   | "ghost stub" — the iteration would continue here but was stopped by `Rule.bound`, `max_depth`, or render-time crop |
+
 ---
 
 ## 4. CLI
@@ -556,9 +570,9 @@ visiter iterate '...' \
   | dot -Tsvg > scc.svg
 ```
 
-See [`demos/05_analyze_cycles_and_depths.sh`](../demos/05_analyze_cycles_and_depths.sh),
-[`demos/06_analyze_condensation.sh`](../demos/06_analyze_condensation.sh),
-and [`demos/07_analyze_shortest_paths.sh`](../demos/07_analyze_shortest_paths.sh)
+See [`demos/analytics_cycles_and_centrality.sh`](../demos/analytics_cycles_and_centrality.sh),
+[`demos/analytics_condensation_rendered.sh`](../demos/analytics_condensation_rendered.sh),
+and [`demos/analytics_shortest_paths_highlighted.sh`](../demos/analytics_shortest_paths_highlighted.sh)
 for runnable end-to-end examples.
 
 ### Scope

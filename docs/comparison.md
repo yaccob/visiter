@@ -165,6 +165,10 @@ discrete reachability graphs.
   or the `visiter analyze` CLI subcommand. See
   [manual §8](manual.md#8-integrating-with-networkx).
 
+Every ✓ in the VisIter column is demonstrated by a runnable script
+in [`demos/`](../demos/); see [`demos/README.md`](../demos/README.md)
+for the capability-to-script mapping.
+
 ## When **not** to reach for VisIter
 
 - **You have a Mathematica license and live in notebooks.** Use

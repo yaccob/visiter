@@ -2,6 +2,17 @@
 # Full pipe composition: build a graph, render to DOT, hand to `dot` for
 # layout + format conversion. Two output formats demonstrate that the
 # downstream stage is just a Graphviz invocation.
+#
+# Side effects worth noticing in the rendered SVG:
+#   - Every interior node (e.g. 2, 3, 4, ...) has TWO outgoing edges
+#     with different op labels (×2 and ×2+1) → it gets a wedged-pie
+#     fill split between the two ops' colors. Showcased explicitly
+#     in wedged_multi_op_fills.sh.
+#   - The boundary leaves (where 2x or 2x+1 would exceed the ceiling)
+#     carry dashed *ghost stubs* — visual marker that `Rule.bound`
+#     suppressed expansion. The same vocabulary is reused for
+#     `max_depth` cutoffs and render-time crops; see
+#     pseudo_edges_bound_and_max_depth.sh.
 set -euo pipefail
 HERE="$(dirname "$0")"
 OUT="$HERE/out"

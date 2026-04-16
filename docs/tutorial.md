@@ -128,10 +128,30 @@ same vocabulary as the bound/max_depth boundary.
 expanded from a root; `"backward"` is natural for graphs with a
 sink/cycle you want to inspect.
 
-See [`demos/01_one_data_many_views.sh`](../demos/01_one_data_many_views.sh)
+See [`demos/anchor_radius_crop_and_recolor.sh`](../demos/anchor_radius_crop_and_recolor.sh)
 for a script that renders one graph as three different views.
 
 ---
+
+## What do the node styles mean?
+
+The renderer uses a small visual vocabulary so the picture itself
+carries semantic information:
+
+- **Bold border** (`penwidth="3"`) — this node is a *root*: one of the
+  seed values you passed to `iterate`.
+- **No fill (white)** — leaf: zero outgoing edges. The iteration
+  terminates here naturally.
+- **Solid fill** — node has exactly one outgoing op label; the fill
+  is that op's color.
+- **Wedged-pie fill** — node has two or more distinct outgoing op
+  labels; the slices are colored after each op (one slice per op).
+- **Darkened fill + white font** — the node carries the `"highlight"`
+  tag (set by a predicate you passed to `iterate`'s `tags` argument).
+
+So at a glance: bold border = where you started; white = where you
+stopped naturally; multi-color pie = where the iteration branches;
+dark = whatever your highlight predicate matched.
 
 ## What do the dashed arrows mean?
 
@@ -153,7 +173,7 @@ is whatever you set up — the legend, the docstring, your own notes.
 No. Values can be any hashable, `str()`-able Python object: integers,
 strings, tuples, frozensets. The rule and op functions just need to
 agree on the type. See
-[`demos/04_string_iteration.sh`](../demos/04_string_iteration.sh) for
+[`demos/non_integer_values.sh`](../demos/non_integer_values.sh) for
 a string-valued example (drop trailing vowels until none remain).
 
 A few `to_dot` features are intrinsically integer-specific —
@@ -187,9 +207,9 @@ Because the stages are decoupled, you can save the JSON once and
 render it many times with different views — or run a schema validator
 between stages as a sanity check.
 
-See [`demos/02_pipeline_to_pdf.sh`](../demos/02_pipeline_to_pdf.sh)
+See [`demos/pipeline_to_svg_and_pdf.sh`](../demos/pipeline_to_svg_and_pdf.sh)
 for the full pipe to PDF, and
-[`demos/03_validate_in_pipeline.sh`](../demos/03_validate_in_pipeline.sh)
+[`demos/schema_validation_in_pipeline.sh`](../demos/schema_validation_in_pipeline.sh)
 for inserting validation into the pipeline.
 
 ---
@@ -212,7 +232,7 @@ is evaluated and its result emitted as JSON. If the expression returns
 a NetworkX graph (e.g. `nx.condensation(graph)`), it flows straight
 back into `visiter to-dot` for rendering. See the
 [manual's NetworkX section](manual.md#8-integrating-with-networkx) and
-[`demos/05`–`07`](../demos/) for more.
+the [`analytics_*` demos](../demos/) for more.
 
 ## What does the JSON Schema buy me?
 
