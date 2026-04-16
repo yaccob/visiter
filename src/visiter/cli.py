@@ -8,7 +8,9 @@ that has `Op`, `Rule`, `iterate`, `to_dot`, and (for `to-dot`/`validate`)
 `graph` pre-bound in its eval namespace.
 """
 
+import itertools
 import json
+import linecache
 import sys
 
 import rich_click as click
@@ -16,6 +18,25 @@ import rich_click as click
 from . import __version__
 from .iteration import Op, Rule, iterate
 from .to_dot import to_dot
+
+_eval_counter = itertools.count()
+
+
+def _eval_with_source(source, ns):
+    """Eval `source` so that inspect.getsource works on its lambdas.
+
+    Compiles with a unique synthetic filename and registers the source
+    lines in ``linecache`` so that ``inspect.getsourcefile`` accepts
+    the filename (via its linecache fallback) and ``inspect.findsource``
+    can retrieve the lines. This makes the `Op(lambda x: ...)`
+    no-label idiom work when lambdas are constructed by the CLI's
+    eval-based argstring contract.
+    """
+    filename = f"<visiter-eval-{next(_eval_counter)}>"
+    lines = [line + "\n" for line in source.splitlines()] or ["\n"]
+    linecache.cache[filename] = (len(source), None, lines, filename)
+    code = compile(source, filename, "eval")
+    return eval(code, ns)
 
 click.rich_click.USE_MARKDOWN = True
 click.rich_click.MAX_WIDTH = 100
@@ -97,7 +118,7 @@ def iterate_cmd(argstring):
     namespace.
     """
     ns = {"Rule": Rule, "Op": Op, "iterate": iterate}
-    graph = eval(f"iterate({argstring})", ns)
+    graph = _eval_with_source(f"iterate({argstring})", ns)
     json.dump(graph, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
 
@@ -123,7 +144,7 @@ def to_dot_cmd(argstring, input_path, output):
     ns = {"graph": graph, "to_dot": to_dot}
     call = (f"to_dot(graph, {argstring})"
             if argstring.strip() else "to_dot(graph)")
-    dot = eval(call, ns)
+    dot = _eval_with_source(call, ns)
 
     if output:
         with open(output, "w") as f:
@@ -210,7 +231,7 @@ def analyze_cmd(argstring, input_path):
 
     graph = to_networkx(doc)
     ns = {"graph": graph, "nx": nx}
-    result = eval(argstring, ns)
+    result = _eval_with_source(argstring, ns)
 
     if isinstance(result, nx.Graph):
         payload = from_networkx(result)

@@ -61,3 +61,28 @@ def test_validate_pipeline_still_works():
 def test_unknown_subcommand_exits_nonzero():
     r = run("nonsense")
     assert r.returncode != 0
+
+
+def test_iterate_pipeline_with_auto_labeled_ops():
+    # Lambdas without an explicit label must work in the CLI eval path:
+    # inspect.getsource has no file backing unless the CLI wires its
+    # eval source into linecache.
+    expr = ('range(1, 8), [Rule(lambda x: x % 3 == 0, '
+            'Op(lambda x: x // 3))], default=Op(lambda x: x + 2)')
+    r = run("iterate", expr)
+    assert r.returncode == 0, r.stderr
+    assert '"x // 3"' in r.stdout
+    assert '"x + 2"' in r.stdout
+
+
+def test_iterate_pipeline_multiline_argstring_auto_labels():
+    # Multiline argstrings are idiomatic for readability. Auto-derived
+    # labels must work even though `inspect.getsourcelines` on a lambda
+    # on the 3rd line would otherwise return a syntactically incomplete
+    # fragment that `ast.parse` refuses.
+    expr = ('range(1, 8),\n'
+            '[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],\n'
+            'default=Op(lambda x: x + 2)')
+    r = run("iterate", expr)
+    assert r.returncode == 0, r.stderr
+    assert '"x + 2"' in r.stdout

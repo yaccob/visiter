@@ -1,6 +1,6 @@
 import ast
 import inspect
-import textwrap
+import linecache
 import time
 from collections import namedtuple
 
@@ -23,22 +23,33 @@ def _derive_label(func):
     name = getattr(func, "__name__", None)
     if name and name != "<lambda>":
         return name
-    try:
-        src_lines, start_lineno = inspect.getsourcelines(func)
-    except (OSError, TypeError) as exc:
-        raise ValueError(
-            "Op could not derive a label from an anonymous callable "
-            "(source unavailable — REPL, built-in, or partial). "
-            "Pass label=... explicitly."
-        ) from exc
-    raw = "".join(src_lines)
-    src = textwrap.dedent(raw)
-    indent = len(raw.split("\n", 1)[0]) - len(src.split("\n", 1)[0])
+
+    # Read the *full* source (whole file or whole eval string) via
+    # linecache — a lambda embedded in a multi-line expression would
+    # otherwise come back from inspect.getsourcelines as a syntactically
+    # incomplete fragment that ast.parse rejects. linecache is how
+    # inspect finds source anyway, and the CLI pre-populates it for
+    # eval'd argstrings so this path works for both real modules and
+    # synthetic eval sources.
+    code = getattr(func, "__code__", None)
+    filename = getattr(code, "co_filename", None) if code else None
+    lines = linecache.getlines(filename) if filename else []
+    if not lines:
+        try:
+            lines, _ = inspect.getsourcelines(func)
+        except (OSError, TypeError) as exc:
+            raise ValueError(
+                "Op could not derive a label from an anonymous callable "
+                "(source unavailable — REPL, built-in, or partial). "
+                "Pass label=... explicitly."
+            ) from exc
+
+    src = "".join(lines)
     try:
         tree = ast.parse(src)
     except SyntaxError as exc:
         raise ValueError(
-            "Op could not parse the lambda's source snippet. "
+            "Op could not parse the retrieved source. "
             "Pass label=... explicitly."
         ) from exc
     lambdas = [n for n in ast.walk(tree) if isinstance(n, ast.Lambda)]
@@ -51,10 +62,12 @@ def _derive_label(func):
         return ast.unparse(lambdas[0].body)
 
     # Disambiguate by position of the first bytecode instruction with
-    # a real source span (skip zero-span entries like RESUME).
+    # a real source span (skip zero-span entries like RESUME). Both
+    # co_positions and ast node positions are absolute to the parsed
+    # source, so they match directly.
     body_line = body_col = None
     try:
-        for line_start, _, col_start, col_end in func.__code__.co_positions():
+        for line_start, _, col_start, col_end in code.co_positions():
             if line_start is None:
                 continue
             if col_start == 0 and col_end == 0:
@@ -65,13 +78,11 @@ def _derive_label(func):
         pass  # Python <3.11: co_positions unavailable
 
     if body_line is not None:
-        rel_line = body_line - start_lineno + 1
-        rel_col = body_col - indent if body_col is not None else None
         matches = [
             n for n in lambdas
-            if getattr(n.body, "lineno", None) == rel_line
-            and (rel_col is None
-                 or getattr(n.body, "col_offset", None) == rel_col)
+            if getattr(n.body, "lineno", None) == body_line
+            and (body_col is None
+                 or getattr(n.body, "col_offset", None) == body_col)
         ]
         if len(matches) == 1:
             return ast.unparse(matches[0].body)
