@@ -33,10 +33,16 @@
       "items": { "$ref": "#/$defs/pseudoEdge" }
     },
     "op_order": {
-      "description": "Distinct op labels in declaration order: rules first (first-seen wins), then `default.label` if not already present. Drives palette assignment in to_dot.",
+      "description": "Distinct op ids in declaration order: rules first (first-seen wins), then `default.id` if not already present. Drives palette assignment in to_dot.",
       "type": "array",
       "items": { "type": "string" },
       "uniqueItems": true
+    },
+    "op_labels": {
+      "description": "Map from op id to the display label rendered on its edges. The id is the stable key (used in `op_order`, `edge.op`, and op_colors pins); label is cosmetic. Optional: when omitted, consumers SHOULD fall back to displaying the id itself.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "type": "string" }
     }
   },
   "$defs": {
@@ -71,7 +77,7 @@
       "properties": {
         "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
         "to":   { "description": "Target value (any JSON type).", "not": { "type": "null" } },
-        "op":   { "description": "Op label — must appear in the graph's op_order.", "type": "string" }
+        "op":   { "description": "Op id — must appear in the graph's op_order. The id is the stable color/ordering key; display label for this edge is looked up in `op_labels` (falling back to the id itself).", "type": "string" }
       }
     },
     "pseudoEdge": {
@@ -80,7 +86,7 @@
       "additionalProperties": false,
       "properties": {
         "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
-        "op":   { "description": "Op label — must appear in the graph's op_order.", "type": "string" }
+        "op":   { "description": "Op id — must appear in the graph's op_order.", "type": "string" }
       }
     }
   }

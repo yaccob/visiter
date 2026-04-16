@@ -165,12 +165,15 @@ visiter iterate '[1],
   max_depth=4' \
   | visiter to-dot 'show_factors=True' | dot -Tsvg > "$OUT/example_show_factors.svg"
 
-# example_pinned_colors — same descent, but ÷3 and +2 pinned to
-# explicit colors that override the palette.
+# example_pinned_colors — same descent, but each op has an explicit
+# stable id that op_colors pins on. `div3` uses a (fill, edge) pair
+# so both colors are chosen independently; `inc2` uses a single pale
+# color so the "edges fade against white" issue is visible side by
+# side.
 visiter iterate '[1, 5, 7],
-  [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-  default=Op(lambda x: x+2, "+2")' \
-  | visiter to-dot 'op_colors={"÷3": ("#ccddff", "#6688bb"), "+2": "#cc4422"}' \
+  [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3", id="div3"))],
+  default=Op(lambda x: x+2, "+2", id="inc2")' \
+  | visiter to-dot 'op_colors={"div3": ("#ccddff", "#6688bb"), "inc2": "#ffdddd"}' \
   | dot -Tsvg > "$OUT/example_pinned_colors.svg"
 
 # --- manual: recipe — depth-gradient coloring (§5) ---

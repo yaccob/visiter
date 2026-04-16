@@ -13,12 +13,13 @@ def make_descent_graph():
 def test_default_palette_assigns_blue_to_first_rule():
     g = make_descent_graph()
     colors = resolve_op_colors(g)
-    # First rule's op = "÷3" → palette[0] = blue pair.
-    assert colors["÷3"][0] == "#ccddff"   # fill
-    assert colors["÷3"][1] == "#6688bb"   # edge
-    # Default's op = "+2" → palette[1] = orange pair.
-    assert colors["+2"][0] == "#ffddcc"
-    assert colors["+2"][1] == "#ddbb99"
+    # Palette is keyed on identity (auto-derived from func). First
+    # rule's op identity = "x // 3" → palette[0] = blue pair.
+    assert colors["x // 3"][0] == "#ccddff"   # fill
+    assert colors["x // 3"][1] == "#6688bb"   # edge
+    # Default's op identity = "x + 2" → palette[1] = orange pair.
+    assert colors["x + 2"][0] == "#ffddcc"
+    assert colors["x + 2"][1] == "#ddbb99"
 
 
 def test_to_dot_emits_dot_with_correct_edge_colors():
@@ -31,8 +32,21 @@ def test_to_dot_emits_dot_with_correct_edge_colors():
 
 def test_op_colors_override_palette():
     g = make_descent_graph()
-    src = to_dot(g, op_colors={"÷3": "#123456"}).source
+    # Pin by identity (auto-derived from func).
+    src = to_dot(g, op_colors={"x // 3": "#123456"}).source
     assert '#123456' in src
+
+
+def test_to_dot_uses_op_labels_for_display_when_id_differs():
+    # Explicit id decoupled from display label: the rendered edge
+    # label must be the display label, not the id.
+    g = iterate([6], rules=[
+        Rule(lambda x: x % 2 == 0,
+             Op(lambda x: x // 2, label="half", id="hv"))],
+        default=None)
+    src = to_dot(g).source
+    assert " half " in src
+    assert " hv " not in src
 
 
 def test_anchor_radius_crops_graph():

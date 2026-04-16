@@ -29,7 +29,7 @@ visiter to-dot 'anchor=1, radius=2, direction="backward"' \
 dot -Tsvg "$OUT/descent_tight.dot" -o "$OUT/descent_tight.svg"
 echo "wrote $OUT/descent_tight.svg (tight crop — note the ghost stubs)"
 
-visiter to-dot 'op_colors={"÷3": "#a83232", "+2": "#3266a8"}' \
+visiter to-dot 'op_colors={"x // 3": "#a83232", "x + 2": "#3266a8"}' \
   < "$DATA" > "$OUT/descent_recolored.dot"
 dot -Tsvg "$OUT/descent_recolored.dot" -o "$OUT/descent_recolored.svg"
 echo "wrote $OUT/descent_recolored.svg (custom palette)"

@@ -100,11 +100,24 @@ def to_dot(graph, *, op_labels=None,
     """
     deadline = parse_time_limit(time_limit)
 
+    # Effective display label per op identity. Priority: user override
+    # (via to_dot's op_labels= kwarg) > graph["op_labels"] (set by
+    # iterate from each Op's label) > format_op_label(identity) as a
+    # last-resort cosmetic transform for legacy string-style ops.
     user_labels = op_labels or {}
+    graph_labels = graph.get("op_labels", {})
     effective_labels = {
-        edge["op"]: user_labels.get(edge["op"], format_op_label(edge["op"]))
+        edge["op"]: user_labels.get(
+            edge["op"],
+            graph_labels.get(edge["op"], format_op_label(edge["op"])))
         for edge in graph["edges"]
     }
+    for pe in graph.get("pseudo_edges", []):
+        effective_labels.setdefault(
+            pe["op"],
+            user_labels.get(
+                pe["op"],
+                graph_labels.get(pe["op"], format_op_label(pe["op"]))))
 
     keep = None
     if anchor is not None or radius is not None:
@@ -143,6 +156,7 @@ def to_dot(graph, *, op_labels=None,
             "pseudo_edges": [pe for pe in graph.get("pseudo_edges", [])
                              if str(pe["from"]) in keep],
             "op_order": graph.get("op_order", []),
+            "op_labels": graph.get("op_labels", {}),
         }
 
     # Pseudo-edges (from iterate's bound=False outcomes) become outgoing

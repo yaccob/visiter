@@ -94,20 +94,50 @@ def _derive_label(func):
     )
 
 
-class Op(namedtuple("_Op", ["func", "label"])):
-    """A guarded operation's callable + its display/identity label.
+class Op(namedtuple("_Op", ["func", "label", "id"])):
+    """A guarded operation's callable, its display label, and its id.
 
-    ``label`` is optional: when omitted, it is derived from ``func`` —
-    the function's ``__name__`` for named functions, or the lambda's
-    body source for lambdas. See ``_derive_label`` for the full rules
-    and fallbacks.
+    - ``label`` is the display string on edges (can carry Unicode,
+      whitespace, emoji — anything that reads well in the SVG). Free
+      for the user to choose.
+    - ``id`` is the stable key used by ``op_order``, ``op_colors``
+      pinning, and JSON round-trips. Defaults to the *auto-derived*
+      form of ``func`` (``__name__`` for named functions, lambda body
+      source for lambdas), **independent of whatever the user chose
+      for label**. That way two ops built from the same ``func`` always
+      share an id, even when their display labels differ; and two ops
+      with accidentally-equal labels but different ``func`` don't
+      collide silently.
+
+    Both ``label`` and ``id`` are optional. Pass ``id=`` explicitly
+    when you want to split two ops whose auto-derived id coincides
+    (e.g. two lambdas whose bodies happen to unparse the same way),
+    when you want a stable pin target that survives func refactors,
+    or simply when you prefer a short custom string.
+
+    When ``_derive_label(func)`` can't recover a source representation
+    (REPL lambdas, ``functools.partial``, C extensions) the label
+    falls back as usual, and ``id`` falls back to whatever label the
+    user supplied — single-string behavior because that's the only
+    key we have.
     """
     __slots__ = ()
 
-    def __new__(cls, func, label=None):
+    def __new__(cls, func, label=None, id=None):
+        derived = None
+        derive_error = None
+        if label is None or id is None:
+            try:
+                derived = _derive_label(func)
+            except ValueError as exc:
+                derive_error = exc
         if label is None:
-            label = _derive_label(func)
-        return super().__new__(cls, func, label)
+            if derived is None:
+                raise derive_error
+            label = derived
+        if id is None:
+            id = derived if derived is not None else label
+        return super().__new__(cls, func, label, id)
 
 
 Rule = namedtuple("Rule", ["condition", "op", "bound"])
@@ -216,9 +246,10 @@ def iterate(start, rules, *, default, max_depth=None,
             "schema_version": "1",
             "roots": [int, ...],
             "nodes": {str(value): {"depth": int, "tags"?: [str, ...]}, ...},
-            "edges": [{"from": A, "to": B, "op": label}, ...],
-            "pseudo_edges": [{"from": A, "op": label}, ...],
-            "op_order": [str, ...]  # distinct op labels in rule-then-default order
+            "edges": [{"from": A, "to": B, "op": op_id}, ...],
+            "pseudo_edges": [{"from": A, "op": op_id}, ...],
+            "op_order": [str, ...],          # distinct op ids, rule-then-default order
+            "op_labels": {op_id: label, ...}  # display label per op id
         }
 
     `schema_version` matches the path segment of the bundled JSON Schema
@@ -241,14 +272,42 @@ def iterate(start, rules, *, default, max_depth=None,
                         f"got {type(default).__name__}")
 
     op_order = []
+    op_labels = {}
     seen_ops = set()
+    id_funcs = {}  # op.id → first func seen; used for collision check
+
+    def _register_op(op):
+        if op.id not in seen_ops:
+            seen_ops.add(op.id)
+            op_order.append(op.id)
+            op_labels[op.id] = op.label
+            id_funcs[op.id] = op.func
+            return
+        # Same id twice — benign if the funcs are the same Python
+        # object (user reused a bound Op) or if the labels also agree.
+        # Otherwise there is likely a collision that will silently merge
+        # two semantically distinct ops in op_order and op_colors.
+        prior_func = id_funcs[op.id]
+        prior_label = op_labels[op.id]
+        if prior_func is op.func:
+            return
+        if prior_label == op.label:
+            return
+        import warnings
+        warnings.warn(
+            f"Op id collision on {op.id!r}: "
+            f"two distinct callables produce the same id "
+            f"(labels {prior_label!r} and {op.label!r}). "
+            "Pass id=... on one of them to disambiguate, or "
+            "accept the merge if this is intentional.",
+            UserWarning,
+            stacklevel=3,
+        )
+
     for rule in rules:
-        if rule.op.label not in seen_ops:
-            seen_ops.add(rule.op.label)
-            op_order.append(rule.op.label)
-    if default is not None and default.label not in seen_ops:
-        seen_ops.add(default.label)
-        op_order.append(default.label)
+        _register_op(rule.op)
+    if default is not None:
+        _register_op(default)
 
     deadline = None
     if time_limit is not None:
@@ -257,7 +316,8 @@ def iterate(start, rules, *, default, max_depth=None,
 
     graph = {"schema_version": "1",
              "roots": list(start), "nodes": {}, "edges": [],
-             "pseudo_edges": [], "op_order": op_order}
+             "pseudo_edges": [], "op_order": op_order,
+             "op_labels": op_labels}
     seen_edges = set()
     seen_pseudo = set()
 
@@ -306,7 +366,7 @@ def iterate(start, rules, *, default, max_depth=None,
                 if result is not None:
                     return result, None
             graph["nodes"][str(nxt)] = make_node(nxt, next_depth)
-        add_edge(x, nxt, op.label)
+        add_edge(x, nxt, op.id)
         return None, (nxt if new_node else None)
 
     frontier = []
@@ -332,7 +392,7 @@ def iterate(start, rules, *, default, max_depth=None,
                     continue
                 any_matched = True
                 if at_max or (rule.bound is not None and not rule.bound(x)):
-                    add_pseudo(x, rule.op.label)
+                    add_pseudo(x, rule.op.id)
                     continue
                 done, nxt = fire(x, rule.op, depth + 1)
                 if done is not None:
@@ -341,7 +401,7 @@ def iterate(start, rules, *, default, max_depth=None,
                     next_frontier.append(nxt)
             if not any_matched and default is not None:
                 if at_max:
-                    add_pseudo(x, default.label)
+                    add_pseudo(x, default.id)
                 else:
                     done, nxt = fire(x, default, depth + 1)
                     if done is not None:

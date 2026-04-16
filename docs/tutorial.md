@@ -82,6 +82,16 @@ identify the callable — `functools.partial`, REPL lambdas built from
 an unreachable source, or several lambdas on one line that differ
 only by whitespace.
 
+`Op` also carries a separate **`id`** field — the stable key used by
+color pinning (`op_colors`) and by `op_order`. By default it's the
+**auto-derived form of `func`** (the same string `_derive_label`
+produces), *not* the user-chosen display label. That means two ops
+built from the same function share an id even when their display
+labels differ, and pins you set via `op_colors` don't break when you
+later rename a label. Set `id=` explicitly when you want a stable,
+short key for pinning — the `Op` section of the manual has the
+details.
+
 ---
 
 ## What happens when no rule applies?

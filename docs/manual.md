@@ -18,30 +18,45 @@ patterns. For the absolute minimum, see [README.md](../README.md).
 
 ## 1. Data model
 
-### `Op(func, label=None)`
+### `Op(func, label=None, id=None)`
 
-A pure operation: a callable mapping the current value to the next, plus
-a string label used for edge display and color keying.
+A pure operation: a callable plus two string fields — a display
+**`label`** and a stable **`id`** used for keying.
 
 ```python
-Op(lambda x: x // 2, "/2")
-Op(lambda x: x // 2)        # label auto-derived as "x // 2"
-Op(square)                  # label auto-derived as "square"
+Op(lambda x: x // 2)                       # label = id = "x // 2"
+Op(lambda x: x // 2, "÷2")                 # label = "÷2", id = "x // 2"
+Op(square)                                 # label = id = "square"
+Op(lambda x: x + 1, "⊕", id="inc")         # label = "⊕", id = "inc"
 ```
 
-When `label` is omitted, it is derived from `func`: for named functions
-from `func.__name__`; for lambdas from the body's source via
-`ast.unparse`. The derivation resolves the common `Rule(lambda x: cond,
-Op(lambda x: body))` idiom even with two lambdas on one line (by
-matching the bytecode's source position). When the source isn't
-retrievable (REPL, `functools.partial`, C extensions) or cannot be
-uniquely identified, `Op` raises `ValueError` asking for an explicit
-`label=`.
+**Label (display).** Free-form display string on edges. When omitted,
+derived from `func`: `func.__name__` for named functions, the lambda
+body's `ast.unparse` form for lambdas (same-line lambdas are
+disambiguated by the bytecode's source position). When the source
+isn't retrievable (REPL, `functools.partial`, C extensions) and no
+`label=` is given, `Op` raises `ValueError`.
 
-The label is the **identity** of an op throughout the system —
-`op_order`, palette assignment, `op_colors` lookup all key on it. Two
-different `Op` instances with the same label are treated as the same
-operation for color and ordering purposes.
+**Id (stable key).** Used by `op_order`, `op_colors` pinning, and
+JSON round-trips. **Defaults to the auto-derived string from `func`
+— independent of whatever the user chose for `label`.** That way two
+ops built from the same `func` share an id even when their display
+labels differ, and two ops that accidentally share a label but have
+different `func` don't collide.
+
+Pass `id=` explicitly when you want:
+- a stable pin target that survives func refactors (whitespace
+  changes, parameter renames, extraction into a named function —
+  all shift the auto-derived id), or
+- a shorter, user-chosen key, or
+- to split two lambdas whose bodies happen to unparse to the same
+  string but are semantically distinct.
+
+If `_derive_label(func)` fails (REPL, partial), `id` falls back to
+`label` (the one signal we have). `iterate` emits a `UserWarning`
+when two rules declare the same id with different callables and
+different labels.
+
 
 ### `Rule(condition, op, bound=None)`
 
@@ -362,17 +377,55 @@ dot = to_dot(graph, anchor=1, radius=8, direction="backward")
 
 ![descent crop, backward from 1](images/crop_backward.svg)
 
-**Pin specific ops to specific colors:**
+**Pin specific ops to specific colors.**
+
+`op_colors` is a `{op_id: color}` map. The **value** can be either:
+
+- A **`(fill, edge)` tuple** — two colors, independently. That matches
+  the two-layer palette: a light pastel for fills (readable labels on
+  top), a saturated mid-tone for edges (thin lines that still pop
+  against a white page).
+- A **single hex string** — shorthand for `(hex, hex)`, same color
+  for both surfaces. Simpler, but the single tone has to work for
+  both: pick a color light enough to keep black label text legible
+  on the fill and the thin edge line drawn in the same color is
+  usually too faint against white; pick dark enough for a visible
+  edge and the text contrast on the fill suffers.
+
+**Recommended: freeze the id explicitly when you want to pin.** Pass
+`id=` on the `Op` and pin on that string — it's stable across
+func refactors, is identical from Python, the CLI, and against
+JSON graphs:
 
 ```python
-dot = to_dot(graph,
-    op_colors={
-        "÷3": ("#ccddff", "#6688bb"),  # explicit fill / edge pair
-        "+2": "#cc4422",                # single string used for both
-    })
+graph = iterate(
+    start=range(1, 30),
+    rules=[Rule(lambda x: x % 3 == 0,
+                Op(lambda x: x // 3, "÷3", id="div3"))],
+    default=Op(lambda x: x + 2, "+2", id="inc2"),
+)
+
+dot = to_dot(graph, op_colors={
+    "div3": ("#ccddff", "#6688bb"),  # (fill, edge) pair — edges stay visible
+    "inc2": "#ffdddd",               # single color — edges fade against white
+})
 ```
 
-![pinned op colors override the palette](images/example_pinned_colors.svg)
+![pinned op colors — (fill, edge) vs. single color](images/example_pinned_colors.svg)
+
+The edge labels in the SVG stay `÷3` and `+2` — `op_colors` pins on
+id; display is separate, served from `graph["op_labels"]`.
+
+> **Why pinning on the auto-derived id is fragile.** If you don't
+> pass `id=`, the id is whatever `_derive_label(func)` produced —
+> `ast.unparse(lambda_body)` for lambdas, `func.__name__` for named
+> functions. That's an *implementation detail of the source*:
+> rewriting `lambda x: x // 3` as `lambda x: x//3` changes the
+> unparsed form; renaming the parameter (`lambda y: y // 3` → id
+> `"y // 3"`) does too; extracting the lambda into a named function
+> shifts it again. Each of those makes your pin silently stop
+> matching — the pin is ignored, no error, the op just falls back to
+> the next palette slot. Explicit `id=` avoids the whole class.
 
 ### Visual vocabulary at a glance
 
@@ -541,16 +594,21 @@ renderer's fill-darkening logic.
     },
 
     "edges": [
-        {"from": int, "to": int, "op": str},
+        {"from": int, "to": int, "op": str},   # op = identity (see op_labels)
         ...
     ],
 
     "pseudo_edges": [
-        {"from": int, "op": str},
+        {"from": int, "op": str},              # op = identity
         ...
     ],
 
-    "op_order": [str, ...],          # distinct op labels in rule order, then default
+    "op_order": [str, ...],          # distinct op identities in rule order, then default
+
+    "op_labels": {                   # map from identity → display label
+        identity_str: display_str,
+        ...
+    },
 }
 ```
 

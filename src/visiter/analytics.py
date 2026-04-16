@@ -79,6 +79,7 @@ def to_networkx(graph):
     g.graph["roots"] = list(graph.get("roots", []))
     g.graph["pseudo_edges"] = list(graph.get("pseudo_edges", []))
     g.graph["op_order"] = list(graph.get("op_order", []))
+    g.graph["op_labels"] = dict(graph.get("op_labels", {}))
 
     for key, info in graph.get("nodes", {}).items():
         # Pass through every node attribute, not only the well-known
@@ -164,4 +165,5 @@ def from_networkx(g):
         "edges": edges,
         "pseudo_edges": list(g.graph.get("pseudo_edges", [])),
         "op_order": seen_ops,
+        "op_labels": dict(g.graph.get("op_labels", {})),
     }
