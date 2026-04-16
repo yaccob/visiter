@@ -147,6 +147,12 @@ Notes:
 
 ### Examples
 
+Each block below shows an `iterate(...)` call and the rendered graph
+that comes out of it. The rendering details (colors, wedges, dashed
+stubs) are defined in §3 — here the pictures just show what the
+iteration *produces* so the code doesn't have to be read in the
+abstract.
+
 **Descent with divisor rule and increment default, range(1, 30):**
 
 ```python
@@ -157,7 +163,9 @@ graph = iterate(
 )
 ```
 
-**Reverse binary tree from 1, ceiling at 64, depth-capped at 8:**
+![descent, full graph](images/iterate_descent.svg)
+
+**Reverse binary tree from 1, ceiling at 64, depth-capped at 5:**
 
 ```python
 ceiling = 64
@@ -172,15 +180,17 @@ graph = iterate(
              bound=lambda x: 2 * x + 1 <= ceiling),
     ],
     default=None,
-    max_depth=8,
+    max_depth=5,
 )
 ```
+
+![reverse binary tree with depth cap](images/iterate_reverse_binary.svg)
 
 **Multi-way decision via conjunctive rules:**
 
 ```python
 graph = iterate(
-    start=range(1, 50),
+    start=range(1, 30),
     rules=[
         Rule(lambda x: x % 15 == 0, Op(lambda x: x // 15, "÷15")),
         Rule(lambda x: x % 3 == 0 and x % 15 != 0, Op(lambda x: x // 3, "÷3")),
@@ -190,6 +200,8 @@ graph = iterate(
     tags={"highlight": lambda x: x > 0 and (x & (x - 1)) == 0},
 )
 ```
+
+![multi-way decision, highlighted powers of two](images/iterate_multiway.svg)
 
 ---
 
@@ -247,6 +259,9 @@ Color assignment is in two layers:
    first-seen edges as fallback). Each distinct op gets a `(fill,
    edge)` pair: from `op_colors` if pinned, otherwise from `palette`
    in order. Exhaustion of the palette yields a neutral grey pair.
+
+   ![op-to-palette: two ops, two (fill, edge) pairs](images/coloring_palette.svg)
+
 2. **Per-node fill** is computed from the node's distinct outgoing op
    labels (real edges plus pseudo-edges and outgoing-cut edges):
    - 0 ops → no fill (Graphviz default white = leaf)
@@ -254,13 +269,19 @@ Color assignment is in two layers:
    - 2+ ops → `style="wedged"` with colon-joined fill colors,
      producing pie-wedge segments inside the ellipse
 
+   ![node fill: leaf (white), solid, wedged](images/coloring_node_fill.svg)
+
 3. **Highlight** (the `"highlight"` tag): the fill colors are darkened
    in HSL space (lightness reduced, hue and saturation preserved) so a
    light blue stays a saturated dark blue rather than going grey. Font
    becomes white for contrast.
 
+   ![highlight: same op, one tagged darker than the other](images/coloring_highlight.svg)
+
 4. **Roots** (any node whose value is in `graph["roots"]`) are
    distinguished by `penwidth="3"` — bold border.
+
+   ![root bold border vs. non-root](images/coloring_roots.svg)
 
 ### Ghost stubs (cut boundary)
 
@@ -281,30 +302,65 @@ The visual vocabulary is uniform: a dashed stub means "the graph
 continues here, but we stopped". The semantic source can be reading
 the legend or inspecting the input.
 
+A graph with both kinds of stub — the pseudo-edge at 8 (from
+`bound=lambda x: 2*x <= 8`) and an incoming boundary stub at 2 from
+the cropped-out parent:
+
+![dashed arrows: pseudo-edge and crop boundary](images/dashed_arrows.svg)
+
 ### `value_range` and trees
 
 For tree-shaped graphs (e.g., the reverse binary tree from a single
-root), `anchor=root, radius=N, direction="forward"` is the natural way
-to show the top N levels.
+root), `anchor=root, radius=N, direction="forward"` (the default) is
+the natural way to show the top N levels.
 
 For forward-iteration graphs with a sink (cycle), `anchor=cycle_node,
 radius=N, direction="backward"` shows the N levels of predecessors
 above the cycle.
 
+**`direction` × cycles × determinism.** A subtlety worth naming: with
+`direction="forward"` and an anchor **inside a cycle**, the forward
+BFS terminates in the cycle. For a *deterministic* iteration (each
+node has exactly one outgoing edge — the usual case when your rules
+are mutually exclusive plus a default), every cycle is closed, so the
+radius is effectively ignored once the cycle is entered. In the
+descent example below, forward from `1` yields just the two-node
+1↔3 cycle regardless of `radius`. `backward` from the same anchor
+reaches the full pre-image tree, bounded by `radius`. When rules
+fan out (several match a single node), cycles may have branches
+leaving them and the radius starts mattering again.
+
+Same descent graph (`range(1, 30)` under `%3 ÷3` else `+2`), same
+anchor `1`, same `radius=8`. `direction="forward"` terminates in the
+1↔3 cycle — the ghost stub flags that other nodes still feed into 3
+from outside the crop:
+
+![anchor=1, radius=8, direction="forward"](images/crop_forward.svg)
+
+Flipping to `direction="backward"` follows edges against the
+iteration, so every value that eventually reaches 1 within 8 hops
+shows up:
+
+![anchor=1, radius=8, direction="backward"](images/crop_backward.svg)
+
 ### Examples
 
-**Reverse binary tree, full graph, three node annotations:**
+**Reverse binary tree, prime-factor annotations on each node:**
 
 ```python
-dot = to_dot(graph, show_binary=True, show_ternary=True, show_factors=True)
+dot = to_dot(graph, show_factors=True)
 dot.render("bt", format="svg")
 ```
+
+![show_factors on the reverse binary tree](images/example_show_factors.svg)
 
 **Descent graph, render only what reaches 1 within 8 hops:**
 
 ```python
 dot = to_dot(graph, anchor=1, radius=8, direction="backward")
 ```
+
+![descent crop, backward from 1](images/crop_backward.svg)
 
 **Pin specific ops to specific colors:**
 
@@ -315,6 +371,8 @@ dot = to_dot(graph,
         "+2": "#cc4422",                # single string used for both
     })
 ```
+
+![pinned op colors override the palette](images/example_pinned_colors.svg)
 
 ### Visual vocabulary at a glance
 
@@ -329,6 +387,10 @@ keep it in mind when reading SVGs:
 | **Wedged-pie fill**                | ≥2 distinct outgoing op labels; one slice per op                                                 |
 | **Darkened fill + white font**     | node carries the `"highlight"` tag (set by a predicate in `iterate(..., tags={...})`)            |
 | **Dashed edge to a tiny target**   | "ghost stub" — the iteration would continue here but was stopped by `Rule.bound`, `max_depth`, or render-time crop |
+
+One graph exhibiting every style in the table above:
+
+![visual vocabulary — one graph, every style](images/node_styles.svg)
 
 ---
 
@@ -401,16 +463,36 @@ no different in trust model from running any local Python script.
 ### "I want depth-gradient coloring"
 
 VisIter exposes `depth` per node but doesn't ship a depth-gradient
-renderer. Easy to build on top:
+renderer. Easy to build on top by constructing the graphviz.Digraph
+yourself and picking each node's fill via `darken` on a base color:
 
 ```python
-from visiter import iterate, to_dot, darken
+from visiter import iterate, Op, Rule, darken
+import graphviz
 
-graph = iterate(...)
-max_d = max(info["depth"] for info in graph["nodes"].values())
-# Pin op_colors per (op, depth) using darken on a base palette,
-# OR post-process dot.source to insert per-node fillcolors.
+graph = iterate(
+    start=[1],
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
+    default=Op(lambda x: x + 2, "+2"),
+    max_depth=6,
+)
+max_d = max(info["depth"] for info in graph["nodes"].values()) or 1
+base = "#ffccaa"
+roots = {str(v) for v in graph["roots"]}
+
+dot = graphviz.Digraph()
+dot.attr(rankdir="TB")
+dot.attr("node", fontsize="11", shape="ellipse", style="filled")
+for k, info in graph["nodes"].items():
+    factor = 1.0 - (info["depth"] / max_d) * 0.55
+    dot.node(f"n{k}", label=k,
+             fillcolor=darken(base, factor),
+             penwidth="3" if k in roots else "1")
+for e in graph["edges"]:
+    dot.edge(f"n{e['from']}", f"n{e['to']}", label=f" {e['op']} ")
 ```
+
+![depth-gradient: darker shades further from the roots](images/depth_gradient.svg)
 
 ### "I want to limit by absolute value"
 

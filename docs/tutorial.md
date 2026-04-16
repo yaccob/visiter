@@ -45,8 +45,8 @@ from visiter import iterate, Op, Rule, to_dot
 
 graph = iterate(
     start=[1],
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-    default=Op(lambda x: x + 2, "+2"),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    default=Op(lambda x: x + 2),
 )
 to_dot(graph).render("first", format="svg")
 ```
@@ -55,6 +55,32 @@ Read it back: from 1 the rule doesn't apply (1 isn't divisible by 3),
 so the default fires and we get 3. From 3 the rule fires, dividing
 back to 1. There's the cycle — and the rendered graph shows two nodes
 and two arrows that prove it.
+
+![simplest cycle](images/simplest.svg)
+
+---
+
+## How are edge labels chosen?
+
+Notice the edges above read `x // 3` and `x + 2` — no labels were
+passed. `Op(func)` derives a label from its callable: the function's
+`__name__` for named functions, or the lambda body rendered via
+`ast.unparse` for lambdas. That covers most cases with no typing.
+
+When you want something shorter, nicer, or non-ASCII, pass the label
+explicitly as the second argument:
+
+```python
+Op(lambda x: x // 3, "÷3")
+Op(lambda x: x + 2, "+2")
+```
+
+![same graph, custom labels](images/custom_labels.svg)
+
+Explicit labels are also the escape hatch when auto-derivation can't
+identify the callable — `functools.partial`, REPL lambdas built from
+an unreachable source, or several lambdas on one line that differ
+only by whitespace.
 
 ---
 
@@ -72,6 +98,16 @@ keyword:
 `default` has no Python default value on purpose. You're forced to
 make the choice, because "no rule matched" is not the same question as
 "my rules said to stop here" — VisIter wants you to spell that out.
+
+With `default=Op(x+1)`, the value whose rule didn't match still gets
+a successor:
+
+![default Op fires](images/default_op.svg)
+
+With `default=None`, the same value is a leaf — drawn white, because
+it has no outgoing edge:
+
+![default None: leaf](images/default_none.svg)
 
 ---
 
@@ -94,6 +130,11 @@ dashed ghost stubs at the boundary, so you can tell the difference
 between "the iteration genuinely terminates here" (no ghost) and "the
 iteration continues, we just stopped looking" (ghost).
 
+Doubling from 1 with `bound=lambda x: 2*x <= 8` stops the BFS at 8 —
+the dashed stub on 8 says "×2 would fire here, we chose not to":
+
+![bound → pseudo-edge → ghost stub](images/bound_ghost.svg)
+
 ---
 
 ## What if the same value is reached two different ways?
@@ -107,6 +148,12 @@ traversal-order depth.
 That's exactly what makes graphs from VisIter useful: cycles, joins,
 and shared subpaths show up as actual graph topology, not as
 mysteriously duplicated subtrees.
+
+Starting from `[1, 9]` with the same divide-by-3-else-+2 rule, 3 is
+reached once from 1 (via +2) and once from 9 (via ÷3) — a single
+node with two incoming edges, not a duplicate:
+
+![fan-in: two paths into 3](images/fan_in.svg)
 
 ---
 
@@ -124,9 +171,25 @@ This says: keep nodes within 2 hops of node 1, walking edges
 edges that leave the kept region are drawn as dashed ghost stubs —
 same vocabulary as the bound/max_depth boundary.
 
-`direction="forward"` is the natural choice for tree-shaped graphs
-expanded from a root; `"backward"` is natural for graphs with a
-sink/cycle you want to inspect.
+`direction="forward"` (the default) is the natural choice for
+tree-shaped graphs expanded from a root; `"backward"` is natural for
+graphs with a sink/cycle you want to inspect. `"both"` walks edges
+undirected — meaningful only for graphs that fan out (multiple
+outgoing ops per node); on a deterministic 1-out graph it collapses
+to backward.
+
+The descent graph (`range(1, 30)` under %3-else-+2) from anchor 1,
+radius 8, is a small orbit forward but a whole pre-image tree
+backward:
+
+**`direction="forward"`** — only the 1↔3 cycle itself (with a dashed
+stub for "other nodes still feed in from outside"):
+
+![crop, direction=forward](images/crop_forward.svg)
+
+**`direction="backward"`** — every predecessor within 8 hops:
+
+![crop, direction=backward](images/crop_backward.svg)
 
 See [`demos/anchor_radius_crop_and_recolor.sh`](../demos/anchor_radius_crop_and_recolor.sh)
 for a script that renders one graph as three different views.
@@ -153,6 +216,10 @@ So at a glance: bold border = where you started; white = where you
 stopped naturally; multi-color pie = where the iteration branches;
 dark = whatever your highlight predicate matched.
 
+One graph exhibiting every style:
+
+![visual vocabulary — one graph, every style](images/node_styles.svg)
+
 ## What do the dashed arrows mean?
 
 Three different things, all rendered identically:
@@ -165,6 +232,11 @@ Three different things, all rendered identically:
 The visual vocabulary is uniform on purpose: a dashed stub means *"the
 graph continues here, but we stopped looking"*. The semantic source
 is whatever you set up — the legend, the docstring, your own notes.
+
+A graph combining both kinds — a pseudo-edge from a `bound` at 8 on
+the 1-branch, and a cropped-out incoming stub at 2:
+
+![dashed arrows: pseudo-edge and crop boundary](images/dashed_arrows.svg)
 
 ---
 
@@ -180,6 +252,11 @@ A few `to_dot` features are intrinsically integer-specific —
 `show_binary`, `show_ternary`, `show_factors`, and `value_range`. If
 you turn them on for a non-integer graph, they emit a warning and are
 silently skipped; everything else still renders normally.
+
+Iterating on words, dropping each trailing vowel until the last
+character is a consonant — string nodes, integer-free graph:
+
+![string-valued iteration](images/strings.svg)
 
 ---
 
