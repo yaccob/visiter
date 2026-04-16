@@ -535,13 +535,40 @@ dot = to_dot(from_networkx(condensation))
 ```
 
 `to_networkx` preserves node keys (as strings — this is the only
-identity the graph dict actually guarantees), node attributes
-(`depth`, `tags`), and edge attributes (`op`). Top-level fields
-(`roots`, `pseudo_edges`, `op_order`, `schema_version`) are stashed
-on `nx.DiGraph.graph` so `from_networkx` can reproduce the original
+identity the graph dict actually guarantees) and every node
+attribute, not only the schema-defined `depth` and `tags`. Edge
+attributes (`op`) pass through as well. Top-level fields (`roots`,
+`pseudo_edges`, `op_order`, `schema_version`) are stashed on
+`nx.DiGraph.graph` so `from_networkx` can reproduce the original
 dict exactly. Round-trip is information-preserving for VisIter graphs;
 for bare NetworkX graphs without VisIter metadata you get a minimal
 but schema-valid result.
+
+**Attribute pass-through** is what lets NX algorithms that annotate
+nodes stay useful on our side. `nx.condensation`, for instance,
+tags each SCC-node with a `members` attribute (a frozenset of the
+original nodes in that component). `from_networkx` carries the
+attribute through to the graph dict; non-JSON values like frozensets
+are coerced to sorted lists so the result stays serialisable.
+
+Once the attribute is in the graph dict, you can tell the renderer
+to use it as the displayed label instead of the node key via
+`to_dot`'s `node_label_attr` kwarg (or the matching argstring on the
+CLI). List/tuple/set values get formatted as `{a, b, c}`
+automatically (no `repr` quotes); scalars render as plain `str()`:
+
+```python
+dot = to_dot(graph, node_label_attr="members")
+```
+
+```bash
+visiter analyze 'nx.condensation(graph)' \
+  | visiter to-dot 'node_label_attr="members"' \
+  | dot -Tsvg > scc.svg
+```
+
+See [`demos/analytics_condensation_rendered.sh`](../demos/analytics_condensation_rendered.sh)
+for the full end-to-end pipeline.
 
 ### CLI
 

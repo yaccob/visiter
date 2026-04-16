@@ -43,7 +43,7 @@
     "node": {
       "type": "object",
       "required": ["depth"],
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "depth": {
           "description": "Minimum BFS hop count from the nearest root. Roots have depth 0.",

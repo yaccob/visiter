@@ -50,6 +50,7 @@ def to_dot(graph, *, op_labels=None,
                  value_range=None,
                  op_colors=None, palette=None,
                  show_binary=False, show_ternary=False, show_factors=False,
+                 node_label_attr=None,
                  time_limit=None, on_limit="raise"):
     """Render a graph dict (from `iterate`) as a Graphviz Digraph.
 
@@ -74,6 +75,13 @@ def to_dot(graph, *, op_labels=None,
         show_binary / show_ternary / show_factors: extra node annotations.
             show_ternary groups digits in 3-trit blocks (base-2 nibbles →
             base-16; base-3 trits → base-27).
+        node_label_attr: optional name of a per-node attribute whose value
+            should be rendered as the node's display label instead of the
+            node key. Falls back to the node key when the attribute is
+            absent. List/tuple/set values are formatted as `{a, b, c}`
+            (no repr quotes); scalars use their plain `str()` form.
+            Useful for showing e.g. `nx.condensation`'s `members` list
+            in the SVG rather than NetworkX's opaque SCC indices.
         time_limit: optional "hh:mm:ss" wall-clock bound on the build phase
             (BFS cropping, build_dot loops, ghost-edge loop). Independent
             from any subprocess-level Graphviz layout timeout the caller
@@ -150,6 +158,7 @@ def to_dot(graph, *, op_labels=None,
                     show_factors=show_factors,
                     op_colors=op_colors, palette=palette,
                     extra_out_ops=extra_out_ops,
+                    node_label_attr=node_label_attr,
                     deadline=deadline, on_limit=on_limit)
 
     for i, (kept, op, kept_is_src) in enumerate(cut_edges):

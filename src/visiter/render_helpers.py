@@ -11,6 +11,23 @@ def _is_int_str(s):
     return bool(re.fullmatch(r"-?(0|[1-9][0-9]*)", s))
 
 
+def _format_label_value(v):
+    """Turn a node-attribute value into a human-readable display string.
+
+    Lists and tuples — the common case for collection-shaped attributes
+    like `nx.condensation`'s `members` — are formatted as `{a, b, c}`,
+    using `str()` on each element (no `repr`, so no stray quotes around
+    string elements). Sets and frozensets are sorted for determinism.
+    Scalars and other types fall back to `str()`.
+    """
+    if isinstance(v, (set, frozenset)):
+        items = sorted(v, key=lambda x: (isinstance(x, str), x))
+        return "{" + ", ".join(str(x) for x in items) + "}"
+    if isinstance(v, (list, tuple)):
+        return "{" + ", ".join(str(x) for x in v) + "}"
+    return str(v)
+
+
 def _node_id(vstr):
     """Stable Graphviz node id derived from a string node key.
 
@@ -182,7 +199,7 @@ def format_op_label(op):
     return op
 
 
-def _label_attrs(vstr, show_binary, show_ternary, show_factors):
+def _label_attrs(vstr, display, show_binary, show_ternary, show_factors):
     extras = []
     int_v = int(vstr) if _is_int_str(vstr) else None
     if show_binary and int_v is not None:
@@ -193,12 +210,12 @@ def _label_attrs(vstr, show_binary, show_ternary, show_factors):
         extras.append(format_prime_factors(int_v))
     if extras:
         body = "<BR/>".join(f'<FONT POINT-SIZE="8">{e}</FONT>' for e in extras)
-        return {"label": f"<{vstr}<BR/>{body}>"}
-    return {"label": vstr}
+        return {"label": f"<{display}<BR/>{body}>"}
+    return {"label": display}
 
 
 def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
-               show_ternary=False, show_factors=False):
+               show_ternary=False, show_factors=False, display=None):
     """Build Graphviz node attributes from a node key and its outgoing edges.
 
     Fill is driven by the node's outgoing edges:
@@ -213,7 +230,8 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
     caller (build_dot) emits a single aggregate warning rather than one
     per node.
     """
-    attrs = _label_attrs(vstr, show_binary, show_ternary, show_factors)
+    attrs = _label_attrs(vstr, display if display is not None else vstr,
+                         show_binary, show_ternary, show_factors)
     colors = [darken(c) for c in out_op_colors] if hl else list(out_op_colors)
     if len(colors) == 1:
         attrs.update(style="filled", fillcolor=colors[0])
@@ -227,7 +245,7 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
 def build_dot(graph, op_labels, edge_dir="forward",
               show_binary=False, show_ternary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
-              deadline=None, on_limit="raise"):
+              deadline=None, on_limit="raise", node_label_attr=None):
     """Build a Graphviz Digraph from a graph dict.
 
     Edges are colored by operation label via `resolve_op_colors`. Nodes are
@@ -286,9 +304,12 @@ def build_dot(graph, op_labels, edge_dir="forward",
         hl = "highlight" in info.get("tags", [])
         ops = sorted(out_ops.get(vstr, set()))
         fill_colors = [resolved.get(op, fallback)[0] for op in ops]
+        display = None
+        if node_label_attr is not None and node_label_attr in info:
+            display = _format_label_value(info[node_label_attr])
         attrs = node_attrs(vstr, fill_colors, hl=hl,
                            show_binary=show_binary, show_ternary=show_ternary,
-                           show_factors=show_factors)
+                           show_factors=show_factors, display=display)
         if vstr in roots:
             attrs["penwidth"] = "3"
         dot.node(node_id, **attrs)

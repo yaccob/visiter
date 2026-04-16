@@ -171,6 +171,67 @@ def test_value_range_warns_and_skips_for_non_int_values():
     assert "banana" in src and "garage" in src
 
 
+def test_node_label_attr_renders_attribute_as_label():
+    graph = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {
+            "0": {"depth": 0, "members": ["1", "3"]},
+            "1": {"depth": 1, "members": ["2", "4", "6"]},
+        },
+        "edges": [{"from": 0, "to": 1, "op": "collapse"}],
+        "pseudo_edges": [],
+        "op_order": ["collapse"],
+    }
+    src = to_dot(graph, node_label_attr="members").source
+    # List-typed attribute renders as {a, b} — braces, no repr quotes.
+    assert "{1, 3}" in src
+    assert "{2, 4, 6}" in src
+    # The ugly Python list-str form must NOT leak into the DOT output.
+    assert "['1', '3']" not in src
+
+
+def test_node_label_attr_scalar_value_renders_as_plain_str():
+    graph = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {
+            "x": {"depth": 0, "score": 0.42},
+            "y": {"depth": 1, "score": 1},
+        },
+        "edges": [],
+        "pseudo_edges": [],
+        "op_order": [],
+    }
+    src = to_dot(graph, node_label_attr="score").source
+    assert "0.42" in src
+    # Plain int scalar shows as "1", not "{1}".
+    assert 'label=1' in src or 'label="1"' in src
+    assert "{0.42}" not in src
+
+
+def test_node_label_attr_missing_attribute_falls_back_to_node_key():
+    graph = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {"alpha": {"depth": 0}},  # no "members" attr
+        "edges": [],
+        "pseudo_edges": [],
+        "op_order": [],
+    }
+    src = to_dot(graph, node_label_attr="members").source
+    # Fell back to the node key.
+    assert "alpha" in src
+
+
+def test_default_label_is_node_key_when_no_attr_given():
+    g = make_descent_graph()
+    # Render with nothing specified.
+    src = to_dot(g).source
+    # Some integer node key should appear as a label verbatim.
+    assert 'label=1' in src or 'label="1"' in src
+
+
 def test_int_features_still_work_after_generalisation():
     # Sanity check: with integer-valued graphs, all int-specific features
     # should continue to function without warnings.

@@ -10,10 +10,18 @@ pipe the result back into `to_dot` for visualization.
 The mapping is deliberately thin and information-preserving:
 
     node key (str in VisIter dict)   ↔   node id (any, typically str) in nx.DiGraph
-    node["depth"], node["tags"]      ↔   node attributes "depth", "tags"
+    every key in node dict           ↔   named node attribute on nx.DiGraph
     edge["op"]                       ↔   edge attribute "op"
     "roots", "pseudo_edges",         ↔   graph-level attributes on
       "op_order", "schema_version"       nx.DiGraph.graph
+
+All node attributes pass through in both directions, not just the
+schema-defined `depth` and `tags` — this is what lets NetworkX
+algorithms that annotate nodes (e.g. `nx.condensation` stashing the
+SCC members as `members`) survive the round-trip into a renderable
+graph dict. Non-JSON-serialisable attributes coming back from NX
+(typically `frozenset`, `set`) are coerced: frozensets/sets become
+sorted lists so the output stays JSON-friendly.
 
 Round-trip (`from_networkx(to_networkx(g))`) is expected to preserve
 the graph dict exactly. Going the other way (`to_networkx(from_networkx(h))`)
@@ -33,17 +41,36 @@ except ImportError as _exc:  # pragma: no cover - surfaced as ImportError
     ) from _exc
 
 
+def _coerce_json_friendly(value):
+    """Turn NX-typical non-JSON types into JSON-serialisable ones.
+
+    - ``frozenset`` / ``set`` → sorted list (deterministic output).
+    - Nested ``dict`` / ``list`` / ``tuple`` → recurse so inner
+      frozensets also get flattened.
+    - Everything else is returned as-is; non-JSON exotica fall back
+      to ``str`` when serialised by ``json.dump(default=str)``.
+    """
+    if isinstance(value, (set, frozenset)):
+        return sorted(_coerce_json_friendly(v) for v in value)
+    if isinstance(value, dict):
+        return {k: _coerce_json_friendly(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_coerce_json_friendly(v) for v in value]
+    return value
+
+
 def to_networkx(graph):
     """Convert a VisIter graph dict to a ``networkx.DiGraph``.
 
     The NetworkX node ids are the same strings that keyed ``graph["nodes"]``
     — this is the only stable identity the graph dict guarantees. Edge
     endpoints in the input are coerced to their ``str`` form so they
-    match up. Node metadata (``depth``, ``tags``) becomes node
-    attributes; edge metadata (``op``) becomes edge attributes. Top-
-    level fields (``roots``, ``pseudo_edges``, ``op_order``,
-    ``schema_version``) are stashed on ``nx.DiGraph.graph`` so a
-    subsequent ``from_networkx`` can reproduce the original dict.
+    match up. Every key of each node entry becomes a NetworkX node
+    attribute, not just the schema-defined ``depth`` and ``tags``.
+    Edge metadata (``op``) becomes an edge attribute. Top-level fields
+    (``roots``, ``pseudo_edges``, ``op_order``, ``schema_version``)
+    are stashed on ``nx.DiGraph.graph`` so a subsequent ``from_networkx``
+    can reproduce the original dict.
     """
     g = nx.DiGraph()
     g.graph["schema_version"] = graph.get("schema_version", "1")
@@ -52,9 +79,11 @@ def to_networkx(graph):
     g.graph["op_order"] = list(graph.get("op_order", []))
 
     for key, info in graph.get("nodes", {}).items():
-        attrs = {"depth": info["depth"]}
-        if "tags" in info:
-            attrs["tags"] = list(info["tags"])
+        # Pass through every node attribute, not only the well-known
+        # `depth` and `tags` ones. Defensive list() copy for tags.
+        attrs = dict(info)
+        if "tags" in attrs:
+            attrs["tags"] = list(attrs["tags"])
         g.add_node(key, **attrs)
 
     for edge in graph.get("edges", []):
@@ -74,13 +103,20 @@ def to_networkx(graph):
 def from_networkx(g):
     """Convert a ``networkx.DiGraph`` back into a VisIter graph dict.
 
-    Node-level attributes ``depth`` and ``tags`` are read if present;
-    missing ``depth`` defaults to 0 so the output still validates
-    against the schema (minimum: depth is required). Edge attribute
-    ``op`` is read; missing ``op`` defaults to ``""`` and is added to
+    Every NetworkX node attribute passes through to the node's dict
+    entry, not only the schema-defined ``depth`` and ``tags``. Missing
+    ``depth`` defaults to 0 so the output still validates against the
+    schema (minimum: depth is required). Edge attribute ``op`` is
+    read; missing ``op`` defaults to ``""`` and is added to
     ``op_order``. Graph-level attributes on ``g.graph`` (``roots``,
     ``pseudo_edges``, ``op_order``, ``schema_version``) are read if
     present; otherwise sensible defaults are used.
+
+    Non-JSON-serialisable attribute values that NX algorithms often
+    produce are coerced into JSON-friendly ones: ``frozenset`` / ``set``
+    become sorted lists. Other exotic types are left as-is and will
+    fall back to ``str`` when the dict is serialised by the CLI's
+    ``json.dump(..., default=str)``.
 
     The output is intended to flow straight into ``to_dot``; for
     arbitrary NetworkX graphs without VisIter metadata you'll get a
@@ -88,9 +124,14 @@ def from_networkx(g):
     """
     nodes = {}
     for n, attrs in g.nodes(data=True):
-        entry = {"depth": attrs.get("depth", 0)}
-        if "tags" in attrs:
-            entry["tags"] = list(attrs["tags"])
+        entry = {}
+        for k, v in attrs.items():
+            entry[k] = _coerce_json_friendly(v)
+        # Ensure depth is present — schema requires it.
+        if "depth" not in entry:
+            entry["depth"] = 0
+        if "tags" in entry and not isinstance(entry["tags"], list):
+            entry["tags"] = list(entry["tags"])
         nodes[str(n)] = entry
 
     edges = []

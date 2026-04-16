@@ -112,6 +112,64 @@ def test_from_networkx_result_renders_via_to_dot():
     assert "digraph" in src
 
 
+# ---- attribute pass-through -------------------------------------------------
+
+def test_from_networkx_preserves_arbitrary_node_attributes():
+    g = nx.DiGraph()
+    g.add_node("0", depth=0, members=frozenset({"1", "3"}), score=0.42)
+    g.add_node("1", depth=1, members=frozenset({"2", "4", "6"}))
+    g.add_edge("0", "1", op="collapse")
+
+    out = from_networkx(g)
+    # frozenset round-trips as a sorted list (JSON-serialisable).
+    assert out["nodes"]["0"]["members"] == ["1", "3"]
+    assert out["nodes"]["0"]["score"] == 0.42
+    assert out["nodes"]["1"]["members"] == ["2", "4", "6"]
+
+
+def test_roundtrip_preserves_arbitrary_node_attributes():
+    vg = sample_graph()
+    for key, info in vg["nodes"].items():
+        info["custom_score"] = int(key) * 10
+
+    g = to_networkx(vg)
+    for key in vg["nodes"]:
+        assert g.nodes[key]["custom_score"] == int(key) * 10
+    out = from_networkx(g)
+    for key, info in vg["nodes"].items():
+        assert out["nodes"][key]["custom_score"] == info["custom_score"]
+
+
+def test_condensation_members_reach_graph_dict():
+    vg = sample_graph()
+    g = to_networkx(vg)
+    cond = nx.condensation(g)
+    out = from_networkx(cond)
+
+    for key, info in out["nodes"].items():
+        assert "members" in info, f"node {key} missing members attr"
+        assert isinstance(info["members"], list)
+
+
+def test_schema_allows_extra_node_attributes():
+    jsonschema_module = pytest.importorskip("jsonschema")
+    from importlib.resources import files
+    schema = json.loads(files("visiter").joinpath(
+        "schemas/v1/graph.schema.json").read_text(encoding="utf-8"))
+    validator = jsonschema_module.Draft202012Validator(schema)
+
+    doc = {
+        "schema_version": "1",
+        "roots": [],
+        "nodes": {"0": {"depth": 0, "members": ["1", "3"], "score": 0.42}},
+        "edges": [],
+        "pseudo_edges": [],
+        "op_order": [],
+    }
+    errors = list(validator.iter_errors(doc))
+    assert not errors, errors
+
+
 # ---- analyze CLI ------------------------------------------------------------
 
 def test_analyze_cli_scalar_result(tmp_path):

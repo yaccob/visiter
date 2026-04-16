@@ -20,6 +20,9 @@ EXPR="$(cat "$HERE/data/descent.expr")"
 
 visiter iterate "$EXPR" > "$DATA"
 
+visiter to-dot '' < "$DATA" | dot -Tsvg -o "$OUT/descent.svg"
+echo "wrote $OUT/descent.svg"
+
 echo "=== node and edge counts ==="
 visiter analyze '{"nodes": nx.number_of_nodes(graph), "edges": nx.number_of_edges(graph)}' \
   < "$DATA"
