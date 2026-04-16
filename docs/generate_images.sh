@@ -211,4 +211,20 @@ PY
 dot -Tsvg < /tmp/visiter_gradient.dot > "$OUT/depth_gradient.svg"
 rm -f /tmp/visiter_gradient.dot
 
+# --- manual: recipe — custom key_type with Fraction (§5) ---
+
+# golden_ratio_convergents — iterating x ↦ 1 + 1/x on Fraction values
+# yields the Fibonacci-ratio convergents to the golden ratio. Fraction
+# is not a JSON-native type, so `json_type` would default to "string";
+# we override with key_type="number" so the values carry their true
+# semantic type in the graph dict. Fraction is in the CLI's default
+# eval namespace, so this renders as a pure pipeline.
+visiter iterate '
+  start=[Fraction(1)],
+  rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+  default=None,
+  max_depth=7,
+  key_type="number"' \
+  | visiter to-dot '' | dot -Tsvg > "$OUT/golden_ratio_convergents.svg"
+
 echo "Regenerated $(ls "$OUT"/*.svg | wc -l | tr -d ' ') SVGs in $OUT/"

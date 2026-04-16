@@ -13,5 +13,6 @@ build/
 demos/out/
 CLAUDE.md
 .claude/settings.local.json
+.reviews/
 
 

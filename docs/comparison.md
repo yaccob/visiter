@@ -163,7 +163,7 @@ discrete reachability graphs.
 ⁶ Via the `[analytics]` extra, which bridges to NetworkX: install with
   `pip install visiter[analytics]`, then use `visiter.analytics.to_networkx`
   or the `visiter analyze` CLI subcommand. See
-  [manual §8](manual.md#8-integrating-with-networkx).
+  [manual §7](manual.md#7-integrating-with-networkx).
 
 Every ✓ in the VisIter column is demonstrated by a runnable script
 in [`demos/`](../demos/); see [`demos/README.md`](../demos/README.md)

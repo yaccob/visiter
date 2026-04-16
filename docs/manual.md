@@ -120,6 +120,16 @@ iterate(start, rules, *, default,
 - `tags`: optional `dict[str, callable]`. Each callable is a predicate
   on values; nodes where it returns True get that tag in their `tags`
   list. `"highlight"` is the conventional tag for visual emphasis.
+- `key_type`: optional override for per-node classification. `None`
+  (default) infers each node's `key_type` from the Python type of its
+  value via `json_type`. Pass one of the seven JSON Schema primitive
+  names (`"null"`, `"boolean"`, `"integer"`, `"number"`, `"string"`,
+  `"array"`, `"object"`) to fix a single type on every node, or a
+  callable `value → str | None` to classify per value (returning
+  `None` falls back to `json_type` for that value). Useful when a
+  domain type serialises to a string but should be treated
+  numerically (`Fraction`, `Decimal`, `sympy.Rational`) so that
+  type-sensitive features (`value_range`, `show_factors`) engage.
 
 ### Output graph dict
 
@@ -571,6 +581,85 @@ Other tag names are stored on nodes too and accessible via
 `graph["nodes"][vstr]["tags"]`, but only `"highlight"` triggers the
 renderer's fill-darkening logic.
 
+### "I want to iterate on `Fraction` / `Decimal` / other domain numeric types"
+
+The default per-node classification comes from `json_type`, which only
+knows about Python's built-in JSON types. Anything outside that set —
+`fractions.Fraction`, `decimal.Decimal`, `sympy.Rational`, a custom
+quantity class — falls through to `"string"` because those values
+serialise through `str()`. Pass `key_type=` to `iterate` to declare
+the true semantic type.
+
+As a worked example, the continued-fraction recurrence `x ↦ 1 + 1/x`
+starting at `1` produces the Fibonacci-ratio convergents to the
+golden ratio. With `Fraction` the arithmetic is exact; without the
+`key_type=` override every node would be labelled `"string"` in the
+graph dict — honest for JSON-on-the-wire, misleading for what the
+values actually mean.
+
+Because `Fraction` and `Decimal` are bound by default in the CLI's
+eval namespace, the whole pipeline runs as one shell command:
+
+```bash
+visiter iterate '
+    start=[Fraction(1)],
+    rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+    default=None,
+    max_depth=7,
+    key_type="number",
+' | visiter to-dot '' | dot -Tsvg > golden.svg
+```
+
+![golden-ratio convergents as Fraction, classified as "number"](images/golden_ratio_convergents.svg)
+
+Two forms of `key_type=` are available:
+
+- **A plain string** — one of the JSON Schema primitives (`"null"`,
+  `"boolean"`, `"integer"`, `"number"`, `"string"`, `"array"`,
+  `"object"`) — sets one fixed classification on every node.
+- **A callable `value → str | None`** — called per value; return one
+  of those primitives, or `None` to delegate to `json_type` for that
+  value. Useful when a single graph mixes domain types (e.g. ints
+  and `Fraction`s coexisting) and you want `json_type`'s defaults
+  on the integers but an override on the rationals:
+
+  ```bash
+  visiter iterate '
+      start=[1, Fraction(1, 2)],
+      rules=[],
+      default=None,
+      key_type=lambda v: "number" if isinstance(v, Fraction) else None,
+  '
+  ```
+
+The override is a **declaration of intent**, not a transformation:
+renderer features that actually consume the value still have to be
+able to handle what you passed. `value_range` in particular calls
+`int(vstr)` on the node keys, which fails on `"1/2"`; so declaring
+`Fraction` values as `"number"` does *not* unlock `value_range` for
+them. Pick the classification that matches how downstream consumers
+should treat the data, and keep the data compatible with the claim.
+
+**Beyond `Fraction` and `Decimal`.** Any other type — `sympy.Rational`,
+a third-party quantity class, your own domain object — is one
+`--import` away:
+
+```bash
+visiter iterate --import sympy:Rational '
+    start=[Rational(1, 2)],
+    rules=[Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+    default=None,
+    key_type="number",
+'
+```
+
+`--import MODULE` binds the module itself; `--import MODULE:NAME[,NAME...]`
+binds selected attributes. The option is repeatable and available on
+`iterate`, `to-dot`, and `analyze`.
+
+A runnable end-to-end version of this pipeline lives in
+[`demos/custom_key_type.sh`](../demos/custom_key_type.sh).
+
 ---
 
 ## 6. Reference: complete graph dict shape
@@ -643,6 +732,18 @@ should fire — no string-pattern heuristic is involved. Hand-built
 graph dicts and producers other than `iterate` must supply
 `key_type` themselves; the schema enforces this via `required`.
 
+For domain types whose values do not fit the built-in mapping —
+`fractions.Fraction`, `decimal.Decimal`, `sympy.Rational`, a custom
+quantity class — pass `key_type=` to `iterate` to override the
+default. A bare string sets a single type for every node; a callable
+`value → str | None` classifies per value, with `None` delegating to
+`json_type` for that particular value. Type-sensitive renderer
+features still require that the downstream value is actually
+representable as the claimed type (e.g. `value_range` casts node
+keys via `int(...)`, which fails on `"1/2"`), so the override is a
+declaration of intent, not a transformation — keep the data
+compatible with the claim.
+
 ### JSON Schema
 
 The authoritative machine-readable contract lives at
@@ -665,7 +766,7 @@ visiter iterate '...' | visiter validate
 
 ---
 
-## 8. Integrating with NetworkX
+## 7. Integrating with NetworkX
 
 VisIter builds iteration graphs and renders them. For everything in
 between — cycle detection, shortest paths, centrality measures,

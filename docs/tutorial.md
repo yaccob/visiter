@@ -318,7 +318,7 @@ visiter iterate '...' | visiter analyze 'list(nx.simple_cycles(graph))'
 is evaluated and its result emitted as JSON. If the expression returns
 a NetworkX graph (e.g. `nx.condensation(graph)`), it flows straight
 back into `visiter to-dot` for rendering. See the
-[manual's NetworkX section](manual.md#8-integrating-with-networkx) and
+[manual's NetworkX section](manual.md#7-integrating-with-networkx) and
 the [`analytics_*` demos](../demos/) for more.
 
 ## What does the JSON Schema buy me?
