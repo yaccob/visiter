@@ -192,6 +192,56 @@ def test_iterate_warns_on_id_collision_with_different_funcs():
     assert any("id collision" in str(w.message) for w in caught)
 
 
+def test_key_type_string_forces_type_for_all_nodes():
+    # Integer seeds, but the user asserts these should be treated as
+    # "number" — e.g. because domain semantics are rational, not integral.
+    g = iterate([1, 2, 3], rules=[], default=None, key_type="number")
+    for info in g["nodes"].values():
+        assert info["key_type"] == "number"
+
+
+def test_key_type_string_rejects_invalid_json_primitive():
+    # "int" is a Python type name, not a JSON Schema primitive.
+    with pytest.raises(ValueError, match="key_type"):
+        iterate([1], rules=[], default=None, key_type="int")
+
+
+def test_key_type_callable_classifies_by_value():
+    # Callable returns the JSON Schema primitive per value.
+    from fractions import Fraction
+    g = iterate(
+        [Fraction(1, 2), Fraction(3, 4)],
+        rules=[], default=None,
+        key_type=lambda v: "number",
+    )
+    for info in g["nodes"].values():
+        assert info["key_type"] == "number"
+
+
+def test_key_type_callable_none_falls_back_to_json_type():
+    # Returning None for some values mixes in the default json_type logic
+    # per value — here strings stay "string", ints become "number".
+    g = iterate(
+        [1, "a"], rules=[], default=None,
+        key_type=lambda v: "number" if isinstance(v, int) else None,
+    )
+    assert g["nodes"]["1"]["key_type"] == "number"
+    assert g["nodes"]["a"]["key_type"] == "string"
+
+
+def test_key_type_callable_invalid_return_raises():
+    # Callable that returns a non-primitive must fail fast when the
+    # resolver is first invoked (seed processing).
+    with pytest.raises(ValueError, match="key_type"):
+        iterate([1], rules=[], default=None, key_type=lambda v: "int")
+
+
+def test_key_type_rejects_wrong_type():
+    # Anything other than None / str / callable is a TypeError.
+    with pytest.raises(TypeError, match="key_type"):
+        iterate([1], rules=[], default=None, key_type=42)
+
+
 def test_iterate_no_warning_when_id_matches_same_op_reused():
     import warnings
     shared = Op(lambda x: x - 1, id="dec")

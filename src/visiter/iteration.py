@@ -144,6 +144,11 @@ Rule = namedtuple("Rule", ["condition", "op", "bound"])
 Rule.__new__.__defaults__ = (None,)
 
 
+JSON_SCHEMA_TYPES = frozenset({
+    "null", "boolean", "integer", "number", "string", "array", "object",
+})
+
+
 def json_type(x):
     """Return the JSON Schema type name for a Python value.
 
@@ -175,6 +180,46 @@ def json_type(x):
     return "string"
 
 
+def _make_key_type_resolver(key_type):
+    """Return a callable value → JSON Schema type string.
+
+    - ``None``: ``json_type`` — infer from the Python type of each value.
+    - string: a fixed type applied to every value (must be one of the
+      seven JSON Schema primitives).
+    - callable: user hook called per value. Return one of the seven
+      primitives to override, or ``None`` to delegate to ``json_type``
+      for that value.
+
+    Raises ``ValueError`` when the argument (or the callable's return
+    value) is not one of the allowed strings.
+    """
+    if key_type is None:
+        return json_type
+    if callable(key_type):
+        def resolve(x):
+            t = key_type(x)
+            if t is None:
+                return json_type(x)
+            if t not in JSON_SCHEMA_TYPES:
+                raise ValueError(
+                    f"key_type callable returned {t!r}; must be one of "
+                    f"{sorted(JSON_SCHEMA_TYPES)} or None"
+                )
+            return t
+        return resolve
+    if isinstance(key_type, str):
+        if key_type not in JSON_SCHEMA_TYPES:
+            raise ValueError(
+                f"key_type={key_type!r}; must be one of "
+                f"{sorted(JSON_SCHEMA_TYPES)} (or a callable, or None)"
+            )
+        return lambda x: key_type
+    raise TypeError(
+        f"key_type must be None, a string, or a callable; "
+        f"got {type(key_type).__name__}"
+    )
+
+
 def parse_range(s):
     """Parse a comma-separated range string like '1-5,8,11-13' into a list of ints.
 
@@ -193,7 +238,7 @@ def parse_range(s):
 
 def iterate(start, rules, *, default, max_depth=None,
             max_nodes=1_000_000, time_limit=None,
-            on_limit="raise", tags=None):
+            on_limit="raise", tags=None, key_type=None):
     """Build a graph by applying rules repeatedly from each starting value.
 
     At each value x, every Rule whose condition(x) is True contributes an
@@ -240,6 +285,16 @@ def iterate(start, rules, *, default, max_depth=None,
         max_depth: optional int; None (default) disables the depth limit.
         max_nodes, time_limit, on_limit: resource-limit controls
         tags: optional dict {name: callable}
+        key_type: optional override for the per-node `key_type` field.
+            `None` (default) infers the JSON Schema type from each value's
+            Python type via `json_type`. A string fixes a single type for
+            every node (must be one of the seven JSON Schema primitives —
+            `null`, `boolean`, `integer`, `number`, `string`, `array`,
+            `object`). A callable is invoked per value and may return one
+            of those strings or `None` to fall back to `json_type` for
+            that value. Useful for domain types that JSON-serialise as
+            strings but should be classified numerically (`Fraction`,
+            `Decimal`) to participate in type-sensitive rendering.
 
     Returns:
         {
@@ -261,6 +316,7 @@ def iterate(start, rules, *, default, max_depth=None,
     if isinstance(start, int):
         start = [start]
     tags = tags or {}
+    resolve_key_type = _make_key_type_resolver(key_type)
 
     rules = list(rules)
     for r in rules:
@@ -322,7 +378,7 @@ def iterate(start, rules, *, default, max_depth=None,
     seen_pseudo = set()
 
     def make_node(x, depth):
-        info = {"depth": depth, "key_type": json_type(x)}
+        info = {"depth": depth, "key_type": resolve_key_type(x)}
         node_tags = [name for name, fn in tags.items() if fn(x)]
         if node_tags:
             info["tags"] = node_tags
