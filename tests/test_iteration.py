@@ -99,3 +99,45 @@ def test_multiple_rules_fan_out():
     out_from_6 = {(e["from"], e["to"]) for e in g["edges"] if e["from"] == 6}
     assert (6, 12) in out_from_6
     assert (6, 2) in out_from_6
+
+
+def test_op_label_defaults_to_function_name():
+    def square(x):
+        return x * x
+    assert Op(square).label == "square"
+
+
+def test_op_label_defaults_to_lambda_body():
+    op = Op(lambda x: x * 2)
+    assert op.label == "x * 2"
+
+
+def test_op_label_explicit_still_wins():
+    op = Op(lambda x: x * 2, "double")
+    assert op.label == "double"
+    op_kw = Op(lambda x: x * 2, label="double")
+    assert op_kw.label == "double"
+
+
+def test_op_label_derivation_drives_iterate():
+    # A rule built with auto-labeled ops must still populate op_order
+    # correctly (labels go through the same code path as explicit ones).
+    rules = [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))]
+    g = iterate([9], rules=rules, default=Op(lambda x: x + 2))
+    assert g["op_order"] == ["x // 3", "x + 2"]
+
+
+def test_op_label_disambiguates_lambdas_on_same_line():
+    # The common idiom Rule(lambda x: cond, Op(lambda x: body)) has two
+    # lambdas on one source line; each Op must still pick its own body.
+    a, b = Op(lambda x: x + 1), Op(lambda x: x - 1)
+    assert a.label == "x + 1"
+    assert b.label == "x - 1"
+
+
+def test_op_label_raises_when_source_unavailable():
+    # functools.partial wraps a callable but carries no retrievable
+    # source; the user must spell out label= in that case.
+    from functools import partial
+    with pytest.raises(ValueError, match="source unavailable"):
+        Op(partial(lambda x, n: x + n, n=1))

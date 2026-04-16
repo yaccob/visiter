@@ -18,14 +18,25 @@ patterns. For the absolute minimum, see [README.md](../README.md).
 
 ## 1. Data model
 
-### `Op(func, label)`
+### `Op(func, label=None)`
 
 A pure operation: a callable mapping the current value to the next, plus
 a string label used for edge display and color keying.
 
 ```python
 Op(lambda x: x // 2, "/2")
+Op(lambda x: x // 2)        # label auto-derived as "x // 2"
+Op(square)                  # label auto-derived as "square"
 ```
+
+When `label` is omitted, it is derived from `func`: for named functions
+from `func.__name__`; for lambdas from the body's source via
+`ast.unparse`. The derivation resolves the common `Rule(lambda x: cond,
+Op(lambda x: body))` idiom even with two lambdas on one line (by
+matching the bytecode's source position). When the source isn't
+retrievable (REPL, `functools.partial`, C extensions) or cannot be
+uniquely identified, `Op` raises `ValueError` asking for an explicit
+`label=`.
 
 The label is the **identity** of an op throughout the system —
 `op_order`, palette assignment, `op_colors` lookup all key on it. Two

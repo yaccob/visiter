@@ -1,7 +1,104 @@
+import ast
+import inspect
+import textwrap
 import time
 from collections import namedtuple
 
-Op = namedtuple("Op", ["func", "label"])
+
+def _derive_label(func):
+    """Derive a human-readable op label from a callable.
+
+    - Named functions: ``func.__name__`` (e.g. ``"square"``).
+    - Lambdas: ``ast.unparse`` of the body after parsing the retrieved
+      source (e.g. ``lambda x: x * 2`` → ``"x * 2"``).
+
+    When multiple lambdas share a source line (``Rule(lambda x: cond,
+    Op(lambda x: body))`` is the common case), the right one is picked
+    by matching ``func.__code__.co_firstlineno`` and the column of the
+    first bytecode instruction against each AST lambda's body position.
+    Falls back to a ``ValueError`` asking for an explicit ``label=``
+    when the source isn't retrievable (REPL, built-in, ``functools.partial``)
+    or when ambiguity cannot be resolved.
+    """
+    name = getattr(func, "__name__", None)
+    if name and name != "<lambda>":
+        return name
+    try:
+        src_lines, start_lineno = inspect.getsourcelines(func)
+    except (OSError, TypeError) as exc:
+        raise ValueError(
+            "Op could not derive a label from an anonymous callable "
+            "(source unavailable — REPL, built-in, or partial). "
+            "Pass label=... explicitly."
+        ) from exc
+    raw = "".join(src_lines)
+    src = textwrap.dedent(raw)
+    indent = len(raw.split("\n", 1)[0]) - len(src.split("\n", 1)[0])
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        raise ValueError(
+            "Op could not parse the lambda's source snippet. "
+            "Pass label=... explicitly."
+        ) from exc
+    lambdas = [n for n in ast.walk(tree) if isinstance(n, ast.Lambda)]
+    if not lambdas:
+        raise ValueError(
+            "Op could not find a lambda in the retrieved source. "
+            "Pass label=... explicitly."
+        )
+    if len(lambdas) == 1:
+        return ast.unparse(lambdas[0].body)
+
+    # Disambiguate by position of the first bytecode instruction with
+    # a real source span (skip zero-span entries like RESUME).
+    body_line = body_col = None
+    try:
+        for line_start, _, col_start, col_end in func.__code__.co_positions():
+            if line_start is None:
+                continue
+            if col_start == 0 and col_end == 0:
+                continue
+            body_line, body_col = line_start, col_start
+            break
+    except AttributeError:
+        pass  # Python <3.11: co_positions unavailable
+
+    if body_line is not None:
+        rel_line = body_line - start_lineno + 1
+        rel_col = body_col - indent if body_col is not None else None
+        matches = [
+            n for n in lambdas
+            if getattr(n.body, "lineno", None) == rel_line
+            and (rel_col is None
+                 or getattr(n.body, "col_offset", None) == rel_col)
+        ]
+        if len(matches) == 1:
+            return ast.unparse(matches[0].body)
+
+    raise ValueError(
+        "Op found multiple lambdas in the retrieved source and "
+        "could not uniquely identify the intended one. "
+        "Pass label=... explicitly."
+    )
+
+
+class Op(namedtuple("_Op", ["func", "label"])):
+    """A guarded operation's callable + its display/identity label.
+
+    ``label`` is optional: when omitted, it is derived from ``func`` —
+    the function's ``__name__`` for named functions, or the lambda's
+    body source for lambdas. See ``_derive_label`` for the full rules
+    and fallbacks.
+    """
+    __slots__ = ()
+
+    def __new__(cls, func, label=None):
+        if label is None:
+            label = _derive_label(func)
+        return super().__new__(cls, func, label)
+
+
 Rule = namedtuple("Rule", ["condition", "op", "bound"])
 Rule.__new__.__defaults__ = (None,)
 
