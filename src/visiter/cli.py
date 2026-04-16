@@ -6,12 +6,22 @@ function call" contract — this avoids per-flag DSL drift as the
 underlying Python API grows. The expression is spliced into a call
 that has `Op`, `Rule`, `iterate`, `to_dot`, and (for `to-dot`/`validate`)
 `graph` pre-bound in its eval namespace.
+
+The eval namespace also comes with `Fraction` and `Decimal` bound by
+default — the common stdlib numeric types that motivate
+`iterate(..., key_type=...)`. Anything beyond those is opt-in via the
+repeatable `--import` option: `--import MODULE` binds the module
+under its own name, `--import MODULE:NAME[,NAME...]` binds specific
+attributes. See each subcommand's `--help`.
 """
 
+import importlib
 import itertools
 import json
 import linecache
 import sys
+from decimal import Decimal
+from fractions import Fraction
 
 import rich_click as click
 
@@ -20,6 +30,63 @@ from .iteration import Op, Rule, iterate
 from .to_dot import to_dot
 
 _eval_counter = itertools.count()
+
+# Stdlib numeric types bound by default in the eval namespace. These
+# are the types that motivated `iterate(..., key_type=...)` (rational
+# and arbitrary-precision decimal arithmetic), so having them
+# available without an explicit --import covers the common case.
+_DEFAULT_EVAL_BINDINGS = {"Fraction": Fraction, "Decimal": Decimal}
+
+_IMPORT_HELP = (
+    "Add names to the eval namespace. `MODULE` binds the module "
+    "itself; `MODULE:NAME[,NAME...]` binds specific attributes from "
+    "it. Repeatable. Example: `--import sympy:Rational,Integer`."
+)
+
+
+def _resolve_imports(specs):
+    """Parse --import specs into a {name: object} mapping.
+
+    Raises ``click.BadParameter`` with a clear message on malformed
+    specs, missing modules, or missing module attributes, so the error
+    reaches the user as a usage error rather than a Python traceback.
+    """
+    bindings = {}
+    for spec in specs:
+        if ":" in spec:
+            module_part, names_part = spec.split(":", 1)
+            module_name = module_part.strip()
+            if not module_name:
+                raise click.BadParameter(
+                    f"--import {spec!r}: module name is empty")
+            try:
+                mod = importlib.import_module(module_name)
+            except ImportError as exc:
+                raise click.BadParameter(
+                    f"--import {spec!r}: cannot import module "
+                    f"{module_name!r} ({exc})") from exc
+            names = [n.strip() for n in names_part.split(",") if n.strip()]
+            if not names:
+                raise click.BadParameter(
+                    f"--import {spec!r}: no attribute names after ':'")
+            for name in names:
+                if not hasattr(mod, name):
+                    raise click.BadParameter(
+                        f"--import {spec!r}: module {module_name!r} "
+                        f"has no attribute {name!r}")
+                bindings[name] = getattr(mod, name)
+        else:
+            module_name = spec.strip()
+            if not module_name:
+                raise click.BadParameter(
+                    "--import received an empty string")
+            try:
+                bindings[module_name] = importlib.import_module(module_name)
+            except ImportError as exc:
+                raise click.BadParameter(
+                    f"--import {spec!r}: cannot import module "
+                    f"{module_name!r} ({exc})") from exc
+    return bindings
 
 
 def _eval_with_source(source, ns):
@@ -97,11 +164,12 @@ def cli():
     """**VisIter** — build and visualize orbit graphs for discrete
     iterations under guarded rules.
 
-    The three subcommands compose via shell pipes — `iterate` builds a
-    graph and writes JSON; `to-dot` reads JSON and writes Graphviz DOT;
+    Four subcommands compose via shell pipes — `iterate` builds a graph
+    and writes JSON; `to-dot` reads JSON and writes Graphviz DOT;
     `validate` checks a graph JSON document against the bundled JSON
-    Schema. Hand the DOT to system Graphviz (`dot -Tsvg/-Tpdf/...`) for
-    the final image.
+    Schema; `analyze` bridges to NetworkX for arbitrary graph
+    algorithms on the JSON. Hand the DOT to system Graphviz
+    (`dot -Tsvg/-Tpdf/...`) for the final image.
 
     See `visiter SUBCOMMAND --help` for per-command details, or the
     project tutorial at https://github.com/yaccob/visiter for a walk-through.
@@ -110,14 +178,17 @@ def cli():
 
 @cli.command("iterate", epilog=ITERATE_EXAMPLE)
 @click.argument("argstring")
-def iterate_cmd(argstring):
+@click.option("--import", "imports", multiple=True, metavar="SPEC",
+              help=_IMPORT_HELP)
+def iterate_cmd(argstring, imports):
     """Build an iteration graph and write JSON to stdout.
 
     ARGSTRING is a Python expression spliced into iterate(<ARGSTRING>)
-    and eval'd. `Op`, `Rule`, and `iterate` are pre-bound in the eval
-    namespace.
+    and eval'd. `Op`, `Rule`, `iterate`, plus `Fraction` and `Decimal`
+    are pre-bound; add more via `--import`.
     """
-    ns = {"Rule": Rule, "Op": Op, "iterate": iterate}
+    ns = {"Rule": Rule, "Op": Op, "iterate": iterate,
+          **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     graph = _eval_with_source(f"iterate({argstring})", ns)
     json.dump(graph, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
@@ -129,11 +200,14 @@ def iterate_cmd(argstring):
               help="Input JSON file ('-' for stdin).")
 @click.option("-o", "--output",
               help="Output DOT file (default: stdout).")
-def to_dot_cmd(argstring, input_path, output):
+@click.option("--import", "imports", multiple=True, metavar="SPEC",
+              help=_IMPORT_HELP)
+def to_dot_cmd(argstring, input_path, output, imports):
     """Render a graph dict (JSON on stdin or --input) as Graphviz DOT.
 
     ARGSTRING is a Python expression spliced into to_dot(graph,
-    <ARGSTRING>) and eval'd. `to_dot` and `graph` are pre-bound.
+    <ARGSTRING>) and eval'd. `to_dot` and `graph`, plus `Fraction`
+    and `Decimal`, are pre-bound; add more via `--import`.
     """
     if input_path == "-":
         graph = json.load(sys.stdin)
@@ -141,7 +215,8 @@ def to_dot_cmd(argstring, input_path, output):
         with open(input_path) as f:
             graph = json.load(f)
 
-    ns = {"graph": graph, "to_dot": to_dot}
+    ns = {"graph": graph, "to_dot": to_dot,
+          **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     call = (f"to_dot(graph, {argstring})"
             if argstring.strip() else "to_dot(graph)")
     dot = _eval_with_source(call, ns)
@@ -202,14 +277,17 @@ def validate_cmd(input_path):
 @click.argument("argstring")
 @click.option("--input", "input_path", default="-", show_default=True,
               help="Input JSON file ('-' for stdin).")
-def analyze_cmd(argstring, input_path):
+@click.option("--import", "imports", multiple=True, metavar="SPEC",
+              help=_IMPORT_HELP)
+def analyze_cmd(argstring, input_path, imports):
     """Run a NetworkX computation against a graph JSON document.
 
     ARGSTRING is a Python expression evaluated with `graph` (a
-    `networkx.DiGraph` built from the input) and `nx` pre-bound. The
-    result is written to stdout as JSON; if it is itself a NetworkX
-    graph, it is converted back into VisIter's schema so the output
-    can flow straight into `visiter to-dot`.
+    `networkx.DiGraph` built from the input) and `nx` pre-bound, plus
+    `Fraction` and `Decimal`; add more via `--import`. The result is
+    written to stdout as JSON; if it is itself a NetworkX graph, it
+    is converted back into VisIter's schema so the output can flow
+    straight into `visiter to-dot`.
 
     Requires the [analytics] extra (networkx).
     """
@@ -230,7 +308,8 @@ def analyze_cmd(argstring, input_path):
             doc = json.load(f)
 
     graph = to_networkx(doc)
-    ns = {"graph": graph, "nx": nx}
+    ns = {"graph": graph, "nx": nx,
+          **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     result = _eval_with_source(argstring, ns)
 
     if isinstance(result, nx.Graph):
