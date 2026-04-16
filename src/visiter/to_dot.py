@@ -172,11 +172,12 @@ def to_dot(graph, *, op_labels=None,
             extra_out_ops.setdefault(kept, set()).add(op)
 
     resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
-    dot = build_dot(graph, effective_labels, edge_dir="forward",
+    dot = build_dot(graph, effective_labels,
                     show_binary=show_binary, show_ternary=show_ternary,
                     show_factors=show_factors,
                     op_colors=op_colors, palette=palette,
                     extra_out_ops=extra_out_ops,
+                    resolved=resolved,
                     node_label_attr=node_label_attr,
                     deadline=deadline, on_limit=on_limit)
 

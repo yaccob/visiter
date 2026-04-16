@@ -245,9 +245,10 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
     return attrs
 
 
-def build_dot(graph, op_labels, edge_dir="forward",
+def build_dot(graph, op_labels,
               show_binary=False, show_ternary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
+              resolved=None,
               deadline=None, on_limit="raise", node_label_attr=None):
     """Build a Graphviz Digraph from a graph dict.
 
@@ -258,6 +259,12 @@ def build_dot(graph, op_labels, edge_dir="forward",
     additional outgoing op labels per node — used by callers that crop the
     graph but still want the kept nodes' fill to reflect ops on edges that
     leave the kept region (otherwise those nodes would appear unfilled).
+
+    `resolved` is an optional pre-computed op → (fill, edge) mapping. When
+    omitted, `build_dot` computes it via `resolve_op_colors(graph,
+    op_colors, palette)` itself; callers that need the same mapping before
+    (e.g. to derive ghost-edge colors) can compute it once and pass it in
+    to avoid the redundant pass.
 
     `deadline` (Unix timestamp from `parse_time_limit`) bounds wall-clock
     time spent in the build loops; on hit, behavior follows `on_limit`
@@ -271,7 +278,8 @@ def build_dot(graph, op_labels, edge_dir="forward",
     dot.attr('edge', fontsize='9')
 
     roots = {str(r) for r in graph.get("roots", [])}
-    resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
+    if resolved is None:
+        resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
 
     out_ops = {}
     for edge in graph["edges"]:
@@ -333,6 +341,6 @@ def build_dot(graph, op_labels, edge_dir="forward",
         label = op_labels.get(op, op)
         color = resolved.get(op, fallback)[1]
         dot.edge(src, dst, label=f" {label} ",
-                 color=color, fontcolor=color, dir=edge_dir)
+                 color=color, fontcolor=color)
 
     return dot
