@@ -17,6 +17,8 @@ there's no implied progression, run them in any order.
 | `analytics_condensation_rendered.sh`            | NetworkX bridge: graph-valued result (condensation) piped back into `to-dot`                          |
 | `analytics_shortest_paths_highlighted.sh`       | NetworkX bridge: shortest paths, then tag-driven node highlighting on render                          |
 | `custom_key_type.sh`                            | Iteration on `fractions.Fraction` values, classified as `"number"` via `iterate(..., key_type=...)`  |
+| `nim_matchstick_game.sh`                        | Matchstick game (Nim): all game states from a `.vit` file, winning positions highlighted             |
+| `atm_banknote_combinations.sh`                  | ATM payout: all ways to dispense 80 EUR with 50/20/10 notes, from a `.vit` file                     |
 
 Run them all at once:
 
