@@ -277,7 +277,7 @@ positional argument that is a Python expression, spliced into the
 function call.
 
 ```bash
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
                  [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
                  default=Op(lambda x: x+2, "+2")' \
   | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
@@ -286,7 +286,7 @@ visiter iterate 'range(1, 30),
 
 Three programs, one pipeline:
 
-- `visiter iterate` writes a JSON graph to stdout.
+- `visiter build` writes a JSON graph to stdout.
 - `visiter to-dot` reads JSON from stdin, writes DOT to stdout.
 - `dot` is system Graphviz; takes DOT, produces SVG/PDF/PNG/etc.
 
@@ -311,7 +311,7 @@ just hands the graph over.
 
 ```bash
 pip install visiter[analytics]
-visiter iterate '...' | visiter analyze 'list(nx.simple_cycles(graph))'
+visiter build '...' | visiter analyze 'list(nx.simple_cycles(graph))'
 ```
 
 `graph` is the NetworkX `DiGraph`, `nx` is the library; the expression

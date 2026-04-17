@@ -13,7 +13,7 @@ rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
             Op(lambda s: s[:-1], "drop-vowel"))],
 default=None'
 
-visiter iterate "$EXPR" \
+visiter build "$EXPR" \
   | visiter to-dot '' \
   | dot -Tsvg -o "$OUT/words.svg"
 echo "wrote $OUT/words.svg (string-valued iteration)"

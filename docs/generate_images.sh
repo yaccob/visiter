@@ -16,38 +16,38 @@ have dot     || { echo "graphviz (dot) not on PATH" >&2; exit 2; }
 # --- tutorial ---
 
 # simplest — auto-derived labels ("x // 3", "x + 2"), no manual labels.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: x%3==0, Op(lambda x: x//3))],
   default=Op(lambda x: x+2)' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/simplest.svg"
 
 # custom_labels — same iteration, explicit short labels.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
   default=Op(lambda x: x+2, "+2")' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/custom_labels.svg"
 
 # default_op — default fires when no rule matches (4→2→1→2 cycle via +1).
-visiter iterate '[4],
+visiter build '[4],
   [Rule(lambda x: x%2==0, Op(lambda x: x//2))],
   default=Op(lambda x: x+1)' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/default_op.svg"
 
 # default_none — no rule, no default → the value is a leaf (1 is white).
-visiter iterate '[4],
+visiter build '[4],
   [Rule(lambda x: x%2==0, Op(lambda x: x//2))],
   default=None' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/default_none.svg"
 
 # bound_ghost — Rule.bound → pseudo-edge → dashed ghost stub at the ceiling.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: True, Op(lambda x: 2*x), bound=lambda x: 2*x<=8)],
   default=None' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/bound_ghost.svg"
 
 # fan_in — two paths enter the same node (3 is reached from 1 via +2
 # and from 9 via //3).
-visiter iterate '[1, 9],
+visiter build '[1, 9],
   [Rule(lambda x: x%3==0, Op(lambda x: x//3))],
   default=Op(lambda x: x+2)' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/fan_in.svg"
@@ -55,7 +55,7 @@ visiter iterate '[1, 9],
 # crop_forward / crop_backward — same graph, same anchor, two directions.
 # Reused by both the tutorial ("how do I show only a slice?") and the
 # manual ("direction + cycle").
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
   [Rule(lambda x: x%3==0, Op(lambda x: x//3))],
   default=Op(lambda x: x+2)' > /tmp/visiter_crop.json
 visiter to-dot 'anchor=1, radius=8, direction="forward"'  --input /tmp/visiter_crop.json | dot -Tsvg > "$OUT/crop_forward.svg"
@@ -71,7 +71,7 @@ rm -f /tmp/visiter_crop.json
 #   2-wedge:      4 (highlighted), 8
 #   3-wedge:      6
 #   4-wedge:      12 (highlighted, root), 24 (root)
-visiter iterate '[6, 12, 24],
+visiter build '[6, 12, 24],
   [Rule(lambda x: x>1 and x%2==0, Op(lambda x: x//2, "÷2")),
    Rule(lambda x: x>1 and x%3==0, Op(lambda x: x//3, "÷3")),
    Rule(lambda x: x>1 and x%4==0, Op(lambda x: x//4, "÷4")),
@@ -82,7 +82,7 @@ visiter iterate '[6, 12, 24],
 
 # strings — non-numeric values. Drop the trailing character while it is
 # a vowel; words ending in a consonant are leaves.
-visiter iterate '["banana", "garage", "queue"],
+visiter build '["banana", "garage", "queue"],
   [Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
         Op(lambda s: s[:-1], "drop-vowel"))],
   default=None' \
@@ -90,7 +90,7 @@ visiter iterate '["banana", "garage", "queue"],
 
 # dashed_arrows — pseudo-edge (bound) and a cropped incoming boundary
 # edge, rendered with the same dashed stub vocabulary.
-visiter iterate '[1, 5],
+visiter build '[1, 5],
   [Rule(lambda x: True, Op(lambda x: 2*x, "×2"), bound=lambda x: 2*x<=8)],
   default=None' > /tmp/visiter_dashed.json
 visiter to-dot 'anchor=2, radius=2, direction="both"' --input /tmp/visiter_dashed.json | dot -Tsvg > "$OUT/dashed_arrows.svg"
@@ -99,13 +99,13 @@ rm -f /tmp/visiter_dashed.json
 # --- manual: iterate examples (§2) ---
 
 # iterate_descent — descent example, rendered (forward ref to §3).
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
   [Rule(lambda x: x%3==0, Op(lambda x: x//3))],
   default=Op(lambda x: x+2)' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/iterate_descent.svg"
 
 # iterate_reverse_binary — reverse binary tree with ceiling + max_depth.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: True, Op(lambda x: 2*x, "×2"), bound=lambda x: 2*x<=64),
    Rule(lambda x: True, Op(lambda x: 2*x+1, "×2+1"), bound=lambda x: 2*x+1<=64)],
   default=None,
@@ -113,7 +113,7 @@ visiter iterate '[1],
   | visiter to-dot '' | dot -Tsvg > "$OUT/iterate_reverse_binary.svg"
 
 # iterate_multiway — conjunctive rules with highlight on powers of two.
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
   [Rule(lambda x: x%15==0, Op(lambda x: x//15, "÷15")),
    Rule(lambda x: x%3==0 and x%15!=0, Op(lambda x: x//3, "÷3")),
    Rule(lambda x: x%5==0 and x%15!=0, Op(lambda x: x//5, "÷5"))],
@@ -125,7 +125,7 @@ visiter iterate 'range(1, 30),
 
 # coloring_palette — two ops ⇒ two palette slots. Fill is light, edge
 # is the saturated mid-tone of the same slot.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: x%2==0, Op(lambda x: x//2, "a"))],
   default=Op(lambda x: x+1, "b")' > /tmp/visiter_cpal.json
 visiter to-dot '' --input /tmp/visiter_cpal.json | dot -Tsvg > "$OUT/coloring_palette.svg"
@@ -133,7 +133,7 @@ rm -f /tmp/visiter_cpal.json
 
 # coloring_node_fill — leaf (white) / solid (one op) / wedged (two ops)
 # on one tiny graph.
-visiter iterate '[4],
+visiter build '[4],
   [Rule(lambda x: x%2==0 and x>1, Op(lambda x: x//2, "a")),
    Rule(lambda x: x%2==0 and x>1, Op(lambda x: x-2, "b"))],
   default=None' \
@@ -142,14 +142,14 @@ visiter iterate '[4],
 # coloring_highlight — same op fires from two nodes; only one carries
 # the "highlight" tag, so the fill is darkened and the font becomes
 # white for contrast.
-visiter iterate '[2, 3],
+visiter build '[2, 3],
   [Rule(lambda x: True, Op(lambda x: x+1, "+1"), bound=lambda x: x+1<=4)],
   default=None,
   tags={"highlight": lambda x: x==2}' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/coloring_highlight.svg"
 
 # coloring_roots — one root (bold border) next to one non-root.
-visiter iterate '[3],
+visiter build '[3],
   [Rule(lambda x: x>0, Op(lambda x: x-1, "-1"))],
   default=None' \
   | visiter to-dot '' | dot -Tsvg > "$OUT/coloring_roots.svg"
@@ -158,7 +158,7 @@ visiter iterate '[3],
 
 # example_show_factors — reverse binary tree with prime-factor
 # annotations toggled on.
-visiter iterate '[1],
+visiter build '[1],
   [Rule(lambda x: True, Op(lambda x: 2*x, "×2"), bound=lambda x: 2*x<=32),
    Rule(lambda x: True, Op(lambda x: 2*x+1, "×2+1"), bound=lambda x: 2*x+1<=32)],
   default=None,
@@ -170,7 +170,7 @@ visiter iterate '[1],
 # so both colors are chosen independently; `inc2` uses a single pale
 # color so the "edges fade against white" issue is visible side by
 # side.
-visiter iterate '[1, 5, 7],
+visiter build '[1, 5, 7],
   [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3", id="div3"))],
   default=Op(lambda x: x+2, "+2", id="inc2")' \
   | visiter to-dot 'op_colors={"div3": ("#ccddff", "#6688bb"), "inc2": "#ffdddd"}' \
@@ -219,7 +219,7 @@ rm -f /tmp/visiter_gradient.dot
 # we override with key_type="number" so the values carry their true
 # semantic type in the graph dict. Fraction is in the CLI's default
 # eval namespace, so this renders as a pure pipeline.
-visiter iterate '
+visiter build '
   start=[Fraction(1)],
   rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
   default=None,

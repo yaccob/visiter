@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Iteration on `fractions.Fraction` values, classified as "number" via
 # iterate's `key_type=` override. Runs as a pure CLI pipeline: the
-# `visiter iterate` subcommand binds `Fraction` and `Decimal` into its
+# `visiter build` subcommand binds `Fraction` and `Decimal` into its
 # eval namespace by default, so no --import or Python heredoc is
 # needed for stdlib numeric types.
 #
@@ -28,7 +28,7 @@ default=None,
 max_depth=7,
 key_type="number"'
 
-visiter iterate "$EXPR" > "$OUT/golden_ratio_convergents.json"
+visiter build "$EXPR" > "$OUT/golden_ratio_convergents.json"
 
 visiter to-dot '' \
   < "$OUT/golden_ratio_convergents.json" \

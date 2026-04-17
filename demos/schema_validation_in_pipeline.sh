@@ -12,7 +12,7 @@ mkdir -p "$OUT"
 EXPR="$(cat "$HERE/data/descent.expr")"
 
 VALIDATE_LOG="$OUT/validate.log"
-visiter iterate "$EXPR" \
+visiter build "$EXPR" \
   | tee >(visiter validate > "$VALIDATE_LOG" 2>&1) \
   | visiter to-dot 'anchor=1, radius=10, direction="backward"' \
   | dot -Tsvg -o "$OUT/descent_validated.svg"

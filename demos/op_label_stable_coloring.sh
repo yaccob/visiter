@@ -18,7 +18,7 @@ OUT="$HERE/out"
 mkdir -p "$OUT"
 
 # (a) Baseline: x // 3 + x + 2 default.
-visiter iterate '
+visiter build '
 range(1, 30),
 [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
 default=Op(lambda x: x + 2)' \
@@ -27,7 +27,7 @@ default=Op(lambda x: x + 2)' \
 echo "wrote $OUT/stable_a_baseline.svg     (x // 3 = blue, x + 2 = orange)"
 
 # (b) Append a third rule: x // 5 for multiples of 5.
-visiter iterate '
+visiter build '
 range(1, 30),
 [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3)),
  Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5))],
@@ -40,7 +40,7 @@ echo "wrote $OUT/stable_b_appended.svg     (x // 3 still blue, x // 5 next slot,
 #     to keep the pre-existing colors in place. Without the pin,
 #     x // 3 would shift palette slots; with it, the visual identity
 #     holds.
-visiter iterate '
+visiter build '
 range(1, 30),
 [Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
  Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],

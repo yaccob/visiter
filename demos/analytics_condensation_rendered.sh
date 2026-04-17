@@ -26,7 +26,7 @@ mkdir -p "$OUT"
 DATA="$OUT/descent.json"
 EXPR="$(cat "$HERE/data/descent.expr")"
 
-visiter iterate "$EXPR" > "$DATA"
+visiter build "$EXPR" > "$DATA"
 
 visiter to-dot 'direction="forward"' < "$DATA" \
   | dot -Tsvg -o "$OUT/descent_full_forward.svg"

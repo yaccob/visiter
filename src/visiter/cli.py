@@ -111,11 +111,11 @@ click.rich_click.SHOW_ARGUMENTS = True
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
-ITERATE_EXAMPLE = """\
+BUILD_EXAMPLE = """\
 **Example**
 
 ```
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
     [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
     default=Op(lambda x: x+2, "+2")'
 ```
@@ -125,7 +125,7 @@ TO_DOT_EXAMPLE = """\
 **Example**
 
 ```
-visiter iterate '...' | visiter to-dot 'anchor=1, radius=8' | dot -Tsvg > out.svg
+visiter build '...' | visiter to-dot 'anchor=1, radius=8' | dot -Tsvg > out.svg
 ```
 """
 
@@ -133,7 +133,7 @@ VALIDATE_EXAMPLE = """\
 **Example**
 
 ```
-visiter iterate '...' | visiter validate
+visiter build '...' | visiter validate
 ```
 """
 
@@ -143,15 +143,15 @@ ANALYZE_EXAMPLE = """\
 Scalars and dicts flow through as JSON:
 
 ```
-visiter iterate '...' | visiter analyze 'nx.number_of_nodes(graph)'
-visiter iterate '...' | visiter analyze 'nx.in_degree_centrality(graph)'
+visiter build '...' | visiter analyze 'nx.number_of_nodes(graph)'
+visiter build '...' | visiter analyze 'nx.in_degree_centrality(graph)'
 ```
 
 If the expression returns a NetworkX graph, it is re-emitted as a
 VisIter graph dict so the next stage can render it:
 
 ```
-visiter iterate '...' \\
+visiter build '...' \\
   | visiter analyze 'nx.condensation(graph)' \\
   | visiter to-dot '' | dot -Tsvg > scc.svg
 ```
@@ -164,11 +164,11 @@ def cli():
     """**VisIter** — build and visualize orbit graphs for discrete
     iterations under guarded rules.
 
-    Four subcommands compose via shell pipes — `iterate` builds a graph
-    and writes JSON; `to-dot` reads JSON and writes Graphviz DOT;
-    `validate` checks a graph JSON document against the bundled JSON
-    Schema; `analyze` bridges to NetworkX for arbitrary graph
-    algorithms on the JSON. Hand the DOT to system Graphviz
+    Four subcommands compose via shell pipes — `build` constructs the
+    orbit graph and writes JSON; `to-dot` reads JSON and writes
+    Graphviz DOT; `validate` checks a graph JSON document against the
+    bundled JSON Schema; `analyze` bridges to NetworkX for arbitrary
+    graph algorithms on the JSON. Hand the DOT to system Graphviz
     (`dot -Tsvg/-Tpdf/...`) for the final image.
 
     See `visiter SUBCOMMAND --help` for per-command details, or the
@@ -176,16 +176,18 @@ def cli():
     """
 
 
-@cli.command("iterate", epilog=ITERATE_EXAMPLE)
+@cli.command("build", epilog=BUILD_EXAMPLE)
 @click.argument("argstring")
 @click.option("--import", "imports", multiple=True, metavar="SPEC",
               help=_IMPORT_HELP)
-def iterate_cmd(argstring, imports):
-    """Build an iteration graph and write JSON to stdout.
+def build_cmd(argstring, imports):
+    """Build an orbit graph and write JSON to stdout.
 
     ARGSTRING is a Python expression spliced into iterate(<ARGSTRING>)
-    and eval'd. `Op`, `Rule`, `iterate`, plus `Fraction` and `Decimal`
-    are pre-bound; add more via `--import`.
+    and eval'd (the Python-side name of the graph-building function is
+    `iterate`; this subcommand is its CLI-friendly alias). `Op`, `Rule`,
+    `iterate`, plus `Fraction` and `Decimal` are pre-bound; add more via
+    `--import`.
     """
     ns = {"Rule": Rule, "Op": Op, "iterate": iterate,
           **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}

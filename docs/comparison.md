@@ -204,7 +204,7 @@ for the capability-to-script mapping.
 - You want the data stage and the render stage decoupled — save JSON
   once, render it many ways; or validate it against a schema mid-pipe;
   or keep the graph for later re-analysis.
-- You want Unix-pipe composition (`visiter iterate … | visiter
+- You want Unix-pipe composition (`visiter build … | visiter
   to-dot … | dot -Tsvg > out.svg`) rather than a REPL session.
 
 ## Honest positioning

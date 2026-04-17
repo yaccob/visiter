@@ -23,7 +23,7 @@ mkdir -p "$OUT"
 # reader's attention.
 
 # (a) Rule.bound: doubling stops when 2x would exceed 16; tripling at 18.
-visiter iterate '
+visiter build '
 start=[1, 5],
 rules=[
     Rule(lambda x: True, Op(lambda x: 2*x, "×2"),
@@ -39,7 +39,7 @@ echo "wrote $OUT/pseudo_via_bound.svg (ghost stubs from Rule.bound)"
 # (b) max_depth: same rules, no bounds; expansion stops at depth 2.
 #     Every node at depth 2 has both rules ready to fire — both become
 #     pseudo-edges, rendered identically to the bound case above.
-visiter iterate '
+visiter build '
 start=[1, 5],
 rules=[
     Rule(lambda x: True, Op(lambda x: 2*x, "×2")),

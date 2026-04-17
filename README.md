@@ -81,7 +81,7 @@ pre-bound. Output is JSON (`iterate`) and DOT (`to-dot`) on stdout, so
 they pipe directly:
 
 ```bash
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
                  [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
                  default=Op(lambda x: x+2, "+2")' \
   | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
@@ -93,7 +93,7 @@ bundled JSON Schema (`schemas/v1/graph.schema.json`, Draft 2020-12):
 
 ```bash
 pip install visiter[validate]
-visiter iterate '...' | visiter validate
+visiter build '...' | visiter validate
 ```
 
 The `analyze` subcommand bridges to [NetworkX](https://networkx.org/)
@@ -104,7 +104,7 @@ flows straight back into `visiter to-dot`:
 
 ```bash
 pip install visiter[analytics]
-visiter iterate '...' \
+visiter build '...' \
   | visiter analyze 'nx.condensation(graph)' \
   | visiter to-dot '' | dot -Tsvg > scc.svg
 ```

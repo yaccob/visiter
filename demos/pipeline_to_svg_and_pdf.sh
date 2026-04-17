@@ -26,7 +26,7 @@ EXPR='start=[1], rules=[
          bound=lambda x: 2*x+1 <= 64),
 ], default=None'
 
-visiter iterate "$EXPR" \
+visiter build "$EXPR" \
   | visiter to-dot 'show_binary=True' \
   | tee "$OUT/binary_tree.dot" \
   | dot -Tsvg -o "$OUT/binary_tree.svg"

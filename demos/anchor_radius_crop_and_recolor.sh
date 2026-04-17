@@ -16,7 +16,7 @@ mkdir -p "$OUT"
 DATA="$OUT/descent.json"
 EXPR="$(cat "$HERE/data/descent.expr")"
 
-visiter iterate "$EXPR" > "$DATA"
+visiter build "$EXPR" > "$DATA"
 echo "wrote $DATA"
 
 visiter to-dot 'anchor=1, radius=10, direction="backward"' \

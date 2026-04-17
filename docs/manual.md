@@ -474,19 +474,19 @@ the argument string.
 ### iterate
 
 ```
-visiter iterate 'ARGSTRING'      → JSON graph on stdout
+visiter build 'ARGSTRING'      → JSON graph on stdout
 ```
 
 Examples:
 
 ```bash
-visiter iterate 'range(1, 30),
+visiter build 'range(1, 30),
     [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
     default=Op(lambda x: x+2, "+2")'
 ```
 
 ```bash
-visiter iterate 'start=[1], rules=[
+visiter build 'start=[1], rules=[
     Rule(lambda x: True, Op(lambda x: 2*x, "×2"), bound=lambda x: 2*x <= 64),
     Rule(lambda x: True, Op(lambda x: 2*x+1, "×2+1"), bound=lambda x: 2*x+1 <= 64),
 ], default=None, max_depth=8'
@@ -508,7 +508,7 @@ visiter to-dot 'anchor=1, radius=8, direction="backward", show_factors=True' < g
 ### Pipe composition
 
 ```bash
-visiter iterate '...' | visiter to-dot '...' | dot -Tsvg > out.svg
+visiter build '...' | visiter to-dot '...' | dot -Tsvg > out.svg
 ```
 
 ### Errors and `eval`
@@ -516,7 +516,7 @@ visiter iterate '...' | visiter to-dot '...' | dot -Tsvg > out.svg
 Any error in the argstring surfaces as a normal Python exception
 (SyntaxError, NameError, TypeError) with its native traceback. There is
 no parser frontend to misdiagnose input. `eval` is appropriate here
-because this is a local research tool: running `visiter iterate '…'` is
+because this is a local research tool: running `visiter build '…'` is
 no different in trust model from running any local Python script.
 
 ---
@@ -601,7 +601,7 @@ Because `Fraction` and `Decimal` are bound by default in the CLI's
 eval namespace, the whole pipeline runs as one shell command:
 
 ```bash
-visiter iterate '
+visiter build '
     start=[Fraction(1)],
     rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
     default=None,
@@ -624,7 +624,7 @@ Two forms of `key_type=` are available:
   on the integers but an override on the rationals:
 
   ```bash
-  visiter iterate '
+  visiter build '
       start=[1, Fraction(1, 2)],
       rules=[],
       default=None,
@@ -645,7 +645,7 @@ a third-party quantity class, your own domain object — is one
 `--import` away:
 
 ```bash
-visiter iterate --import sympy:Rational '
+visiter build --import sympy:Rational '
     start=[Rational(1, 2)],
     rules=[Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
     default=None,
@@ -761,7 +761,7 @@ Validate a graph document against the bundled schema via the CLI:
 
 ```bash
 pip install visiter[validate]
-visiter iterate '...' | visiter validate
+visiter build '...' | visiter validate
 ```
 
 ---
@@ -855,7 +855,7 @@ for the full end-to-end pipeline.
 The `analyze` subcommand mirrors the Python API over shell pipes:
 
 ```bash
-visiter iterate '...' | visiter analyze '<python expression>'
+visiter build '...' | visiter analyze '<python expression>'
 ```
 
 `graph` (a `networkx.DiGraph`) and `nx` are pre-bound in the eval
@@ -865,13 +865,13 @@ so the output flows straight into `visiter to-dot`:
 
 ```bash
 # Count things.
-visiter iterate '...' | visiter analyze 'nx.number_of_nodes(graph)'
+visiter build '...' | visiter analyze 'nx.number_of_nodes(graph)'
 
 # List cycles.
-visiter iterate '...' | visiter analyze 'list(nx.simple_cycles(graph))'
+visiter build '...' | visiter analyze 'list(nx.simple_cycles(graph))'
 
 # Pipe a derived graph back into rendering.
-visiter iterate '...' \
+visiter build '...' \
   | visiter analyze 'nx.condensation(graph)' \
   | visiter to-dot '' \
   | dot -Tsvg > scc.svg
