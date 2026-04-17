@@ -164,12 +164,15 @@ def cli():
     """**VisIter** — build and visualize orbit graphs for discrete
     iterations under guarded rules.
 
-    Four subcommands compose via shell pipes — `build` constructs the
-    orbit graph and writes JSON; `to-dot` reads JSON and writes
-    Graphviz DOT; `validate` checks a graph JSON document against the
-    bundled JSON Schema; `analyze` bridges to NetworkX for arbitrary
-    graph algorithms on the JSON. Hand the DOT to system Graphviz
+    Pipe-composable subcommands — `build` constructs the orbit graph
+    and writes JSON; `to-dot` reads JSON and writes Graphviz DOT;
+    `validate` checks a graph JSON document against the bundled JSON
+    Schema; `analyze` bridges to NetworkX for arbitrary graph
+    algorithms on the JSON. Hand the DOT to system Graphviz
     (`dot -Tsvg/-Tpdf/...`) for the final image.
+
+    For the one-shot path (argstring → image in one call, with safety
+    caps) use `visiter render …` or its shorter alias `viter`.
 
     See `visiter SUBCOMMAND --help` for per-command details, or the
     project tutorial at https://github.com/yaccob/visiter for a walk-through.
@@ -323,8 +326,122 @@ def analyze_cmd(argstring, input_path, imports):
     sys.stdout.write("\n")
 
 
+RENDER_EXAMPLE = """\
+**Example**
+
+```
+viter 'range(1, 30),
+    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+    default=Op(lambda x: x+2, label="+2")' \\
+  --render 'anchor=1, radius=8, direction="backward"' \\
+  -o descent.svg
+```
+"""
+
+
+# Safe defaults for one-shot rendering — tighter than `iterate`'s own
+# defaults so typo'd rules don't silently consume minutes or gigabytes.
+_RENDER_DEFAULT_MAX_NODES = 10_000
+_RENDER_DEFAULT_TIME_LIMIT = "00:00:30"
+
+
+@cli.command("render", epilog=RENDER_EXAMPLE)
+@click.argument("argstring")
+@click.option("--render", "render_args", default="", metavar="ARGSTRING",
+              help="Python expression spliced into to_dot(graph, …). "
+                   "Empty means to_dot defaults.")
+@click.option("-f", "--format", "fmt", default="svg", show_default=True,
+              help="Output format passed to Graphviz (svg, pdf, png, "
+                   "dot, …).")
+@click.option("-o", "--output", required=True, metavar="FILE",
+              help="Output file path.")
+@click.option("--max-nodes", type=int, default=_RENDER_DEFAULT_MAX_NODES,
+              show_default=True,
+              help="Safety cap on the BFS node count. Argstring can "
+                   "override by passing `max_nodes=…` explicitly.")
+@click.option("--max-depth", type=int, default=None,
+              help="Optional BFS depth cap. Argstring can override.")
+@click.option("--time-limit", default=_RENDER_DEFAULT_TIME_LIMIT,
+              show_default=True, metavar="HH:MM:SS",
+              help="Wall-clock limit on the build phase. Argstring "
+                   "can override.")
+@click.option("--import", "imports", multiple=True, metavar="SPEC",
+              help=_IMPORT_HELP)
+def render_cmd(argstring, render_args, fmt, output,
+               max_nodes, max_depth, time_limit, imports):
+    """Run the full pipeline (build → to-dot → Graphviz) in one call.
+
+    ARGSTRING is the same Python expression you'd pass to `build`.
+    --render takes the argstring you'd pass to `to-dot` (optional).
+
+    Niederschwellig entry point: safe defaults (`--max-nodes 10000`,
+    `--time-limit 00:00:30`, `on_limit="stop"` + a warning on stderr
+    when the cap is hit) keep a typo'd rule from running away. Any
+    of the safety caps can be overridden either via CLI flag or by
+    passing the same kwarg explicitly in ARGSTRING.
+    """
+    from pathlib import Path
+
+    # Wrap iterate() so the CLI's safety defaults apply but an
+    # explicit kwarg in the argstring still wins. dict.setdefault
+    # honours the caller-provided value when present.
+    cap_was_hit = {"flag": False}
+
+    def _iterate_with_caps(*args, **kwargs):
+        effective_max = kwargs.get("max_nodes", max_nodes)
+        kwargs.setdefault("max_nodes", max_nodes)
+        kwargs.setdefault("time_limit", time_limit)
+        kwargs.setdefault("on_limit", "stop")
+        if max_depth is not None:
+            kwargs.setdefault("max_depth", max_depth)
+        g = iterate(*args, **kwargs)
+        if (effective_max is not None
+                and len(g.get("nodes", {})) >= effective_max):
+            cap_was_hit["flag"] = True
+            click.echo(
+                f"viter: node count reached {effective_max}; "
+                f"output is truncated. Raise --max-nodes (or pass "
+                f"max_nodes=... in the argstring) to go further.",
+                err=True,
+            )
+        return g
+
+    build_ns = {"Rule": Rule, "Op": Op, "iterate": _iterate_with_caps,
+                **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
+    graph = _eval_with_source(f"iterate({argstring})", build_ns)
+
+    # JSON-round-trip so graph keys end up as strings (matches what
+    # `visiter build | visiter to-dot` would see), without this
+    # Fraction/Decimal node keys stay as their native types and
+    # break to_dot's string-keyed lookups.
+    graph = json.loads(json.dumps(graph, default=str))
+
+    render_ns = {"graph": graph, "to_dot": to_dot,
+                 **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
+    render_call = (f"to_dot(graph, {render_args})"
+                   if render_args.strip() else "to_dot(graph)")
+    dot = _eval_with_source(render_call, render_ns)
+
+    if fmt == "dot":
+        Path(output).write_text(dot.source, encoding="utf-8")
+    else:
+        Path(output).write_bytes(dot.pipe(format=fmt))
+
+
 def main():
     cli()
+
+
+def viter_main():
+    """Entry point for the ``viter`` console script — shortcut for
+    ``visiter render``. Injects the subcommand name so users can say
+    ``viter 'argstring' -o out.svg`` (or ``viter --help``, etc.)
+    without typing ``render``. Only ``-V``/``--version`` stays on the
+    group so ``viter --version`` reports the tool version.
+    """
+    if len(sys.argv) == 1 or sys.argv[1] not in ("-V", "--version"):
+        sys.argv.insert(1, "render")
+    cli(prog_name="viter")
 
 
 if __name__ == "__main__":

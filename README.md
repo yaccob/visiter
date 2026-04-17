@@ -74,16 +74,34 @@ dot.render("binary_tree", format="svg")
 
 ## CLI
 
-A single `visiter` command with subcommands. Each subcommand takes its
-function's keyword arguments as a single Python expression that is
-`eval`'d in a namespace where `Op`, `Rule`, `iterate`, and `to_dot` are
-pre-bound. Output is JSON (`iterate`) and DOT (`to-dot`) on stdout, so
-they pipe directly:
+Two entry points, same Python API underneath:
+
+- **`viter`** — one-shot alias for the full pipeline. Takes the
+  `iterate` argstring and writes the rendered image directly.
+  Safe defaults (`--max-nodes 10000`, `--time-limit 00:00:30`, stop
+  with a warning on overflow) keep a typo'd rule from running away.
+- **`visiter`** — pipe-composable subcommands (`build`, `to-dot`,
+  `validate`, `analyze`, `render`) for when you want to save the JSON,
+  validate it, run NetworkX over it, or render the same data multiple
+  ways.
+
+Quickstart via `viter`:
+
+```bash
+viter 'range(1, 30),
+       [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+       default=Op(lambda x: x+2, label="+2")' \
+  --render 'anchor=1, radius=8, direction="backward"' \
+  -o descent.svg
+```
+
+Same thing via the `visiter` pipeline (JSON on the wire, no safety
+caps — spelled out for full control):
 
 ```bash
 visiter build 'range(1, 30),
-                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-                 default=Op(lambda x: x+2, label="+2")' \
+               [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+               default=Op(lambda x: x+2, label="+2")' \
   | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
   | dot -Tsvg > descent.svg
 ```

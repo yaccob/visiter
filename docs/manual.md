@@ -514,6 +514,60 @@ visiter to-dot 'anchor=1, radius=8, direction="backward", show_factors=True' < g
 visiter build '...' | visiter to-dot '...' | dot -Tsvg > out.svg
 ```
 
+### One-shot: `viter` / `visiter render`
+
+For the "I just want the image" case there is a second entry point
+that runs `build → to-dot → Graphviz` in a single call. Both spellings
+are equivalent:
+
+```bash
+viter 'ARGSTRING' [--render 'TO_DOT_ARGSTRING'] [-f FORMAT] -o FILE
+visiter render 'ARGSTRING' [--render 'TO_DOT_ARGSTRING'] [-f FORMAT] -o FILE
+```
+
+`ARGSTRING` is the same Python expression `build` takes. `--render`
+is optional and mirrors the argstring `to-dot` would take. Default
+`--format` is `svg`; `pdf`, `png`, `dot`, and everything else that
+Graphviz's `dot` speaks work as well. `--import` is accepted on the
+same terms as on the pipe subcommands.
+
+Unlike the pipe path, `viter` ships **safe defaults** tuned for
+exploration, so a typo'd rule can't silently burn minutes or
+gigabytes:
+
+| Flag            | Default       | Purpose                                    |
+| --------------- | ------------- | ------------------------------------------ |
+| `--max-nodes`   | `10000`       | BFS node cap (vs. `iterate`'s 1M default)  |
+| `--time-limit`  | `00:00:30`    | Wall-clock limit on the build phase        |
+| `--max-depth`   | *(unset)*     | Optional BFS depth cap                     |
+
+Overflow behaviour is always `on_limit="stop"` — you get whatever
+was built so far, plus a one-line warning on stderr naming the cap
+that tripped. Raise the cap with the matching flag, or pass the
+same kwarg explicitly in `ARGSTRING` (argstring always wins over
+CLI flag, via `dict.setdefault` semantics).
+
+```bash
+# Minimal: one rule, one default, safe defaults, write SVG.
+viter 'range(1, 30),
+       [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+       default=Op(lambda x: x+2, label="+2")' \
+  -o descent.svg
+
+# Add to_dot options via --render:
+viter '...' --render 'anchor=1, radius=8, show_factors=True' -o out.svg
+
+# Raise caps for a larger exploration:
+viter 'range(1, 100), …' --max-nodes 100000 --time-limit 00:02:00 -o big.svg
+
+# PDF instead of SVG:
+viter '...' -f pdf -o out.pdf
+```
+
+When you need to save the JSON between stages, re-render the same
+graph with different views, insert schema validation, or run NetworkX
+over the data, drop back to the pipe subcommands.
+
 ### Errors and `eval`
 
 Any error in the argstring surfaces as a normal Python exception

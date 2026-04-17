@@ -43,6 +43,7 @@ dev = [
 
 [project.scripts]
 visiter = "visiter.cli:main"
+viter = "visiter.cli:viter_main"
 
 [project.urls]
 Homepage = "https://github.com/yaccob/visiter"
