@@ -20,7 +20,7 @@ there's no implied progression, run them in any order.
 | `nim_matchstick_game.sh`                        | Matchstick game (Nim): all game states from a `.vit` file, winning positions highlighted             |
 | `atm_banknote_combinations.sh`                  | ATM payout: all ways to dispense 80 EUR with 50/20/10 notes, from a `.vit` file                     |
 | `tictactoe.sh`                                  | Tic-Tac-Toe game tree with symmetry reduction (canonical boards); arg: depth (default 9)            |
-| `sliding_puzzle.sh`                             | Sliding puzzle (W×H grid); args: width height (default 2 2). Cycles from reversible moves           |
+| `water_jugs.sh`                                 | Water jug problem (Die Hard 3): non-trivial cycles from fill/empty/pour; args: cap_a cap_b target   |
 
 Run them all at once:
 
