@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [0.10.0] — 2026-04-17
 
 ### Breaking
 - Python API function renamed: `iterate()` → `build()`. The function
@@ -151,6 +151,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Value-neutral iteration (not limited to integers).
 - JSON Schema for the graph dict (`schemas/v1/graph.schema.json`).
 
+[0.10.0]: https://github.com/yaccob/visiter/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/yaccob/visiter/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/yaccob/visiter/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/yaccob/visiter/compare/v0.7.2...v0.8.0
