@@ -24,7 +24,7 @@ rules=[
 default=Op(lambda x: x + 1, label="+1"),
 max_depth=4'
 
-visiter build "$EXPR" \
+echo "$EXPR" | visiter build \
   | visiter to-dot 'anchor=1, radius=10, direction="backward"' \
   | dot -Tsvg -o "$OUT/wedged_fills.svg"
 echo "wrote $OUT/wedged_fills.svg"

@@ -8,7 +8,7 @@ Integers 1–9. Rule: divisible by 3 → divide by 3. Everything
 else → add 2. Where does each value end up?
 
 ```bash
-viter 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)'
+echo 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)' | viter
 ```
 
 ![descent graph, range 1–9](docs/images/readme_quickstart.svg)
@@ -26,19 +26,27 @@ Graphviz must be available on `PATH` (`brew install graphviz` /
 
 ## Going further
 
-Add explicit labels, write to a file:
+Put the iteration in a `.vit` file — shebang-executable, with
+comments:
 
 ```bash
-viter 'range(1, 10),
-       [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-       Op(lambda x: x+2, label="+2")' \
-  -o descent.svg
+#!/usr/bin/env viter
+# descent graph, range 1–9
+range(1, 10),
+[Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+Op(lambda x: x+2, label="+2")
+```
+
+```bash
+chmod +x descent.vit
+./descent.vit > descent.svg       # shebang
+viter descent.vit -o descent.svg  # explicit
 ```
 
 Crop the view around a node, render only what reaches it:
 
 ```bash
-viter '...' --render 'anchor=1, radius=8, direction="backward"' -o crop.svg
+viter descent.vit --render 'anchor=1, radius=8, direction="backward"' -o crop.svg
 ```
 
 Use the Python API instead of the CLI:
@@ -56,13 +64,13 @@ to_dot(graph).render("descent", format="svg")
 
 ## Two entry points
 
-- **`viter`** — one-shot: argstring in, image out. Safe defaults
-  (`--max-nodes 10000`, `--time-limit 00:00:30`) keep a typo'd rule
-  from running away. Output goes to stdout (pipe it!) or to `-o FILE`.
+- **`viter`** — one-shot: `.vit` file (or stdin) in, image out. Safe
+  defaults (`--max-nodes 10000`, `--time-limit 00:00:30`) keep a
+  typo'd rule from running away. Output goes to stdout or `-o FILE`.
 - **`visiter`** — pipe-composable subcommands for full control:
 
   ```bash
-  visiter build '…' | visiter to-dot '…' | dot -Tsvg > out.svg
+  visiter build descent.vit | visiter to-dot 'anchor=1' | dot -Tsvg > out.svg
   ```
 
   `build` writes JSON; `to-dot` reads JSON, writes DOT; `validate`

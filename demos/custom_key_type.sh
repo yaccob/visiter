@@ -28,7 +28,7 @@ default=None,
 max_depth=7,
 key_type="number"'
 
-visiter build "$EXPR" > "$OUT/golden_ratio_convergents.json"
+echo "$EXPR" | visiter build > "$OUT/golden_ratio_convergents.json"
 
 visiter to-dot '' \
   < "$OUT/golden_ratio_convergents.json" \

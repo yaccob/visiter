@@ -23,30 +23,28 @@ mkdir -p "$OUT"
 # reader's attention.
 
 # (a) Rule.bound: doubling stops when 2x would exceed 16; tripling at 18.
-visiter build '
-start=[1, 5],
-rules=[
+visiter build <<'VIT' | visiter to-dot '' | dot -Tsvg -o "$OUT/pseudo_via_bound.svg"
+[1, 5],
+[
     Rule(lambda x: True, Op(lambda x: 2*x, label="×2"),
          bound=lambda x: 2*x <= 16),
     Rule(lambda x: True, Op(lambda x: 3*x, label="×3"),
          bound=lambda x: 3*x <= 18),
 ],
-default=None' \
-  | visiter to-dot '' \
-  | dot -Tsvg -o "$OUT/pseudo_via_bound.svg"
+None
+VIT
 echo "wrote $OUT/pseudo_via_bound.svg (ghost stubs from Rule.bound)"
 
 # (b) max_depth: same rules, no bounds; expansion stops at depth 2.
 #     Every node at depth 2 has both rules ready to fire — both become
 #     pseudo-edges, rendered identically to the bound case above.
-visiter build '
-start=[1, 5],
-rules=[
+visiter build <<'VIT' | visiter to-dot '' | dot -Tsvg -o "$OUT/pseudo_via_max_depth.svg"
+[1, 5],
+[
     Rule(lambda x: True, Op(lambda x: 2*x, label="×2")),
     Rule(lambda x: True, Op(lambda x: 3*x, label="×3")),
 ],
-default=None,
-max_depth=2' \
-  | visiter to-dot '' \
-  | dot -Tsvg -o "$OUT/pseudo_via_max_depth.svg"
+None,
+max_depth=2
+VIT
 echo "wrote $OUT/pseudo_via_max_depth.svg (ghost stubs from max_depth=2)"

@@ -21,7 +21,7 @@ mkdir -p "$OUT"
 DATA="$OUT/descent.json"
 EXPR="$(cat "$HERE/data/descent.expr")"
 
-visiter build "$EXPR" > "$DATA"
+echo "$EXPR" | visiter build > "$DATA"
 
 # (a) emit raw shortest-path data as JSON
 visiter analyze '

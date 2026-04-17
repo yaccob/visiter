@@ -218,8 +218,9 @@ def test_analyze_cli_scalar_result(tmp_path):
                    + os.environ.get("PATH", "")}
     expr = ('range(1,10), [Rule(lambda x: x%3==0, '
             'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
-    iterate_run = subprocess.run(["visiter", "build", expr],
-                                 capture_output=True, text=True, env=env)
+    iterate_run = subprocess.run(["visiter", "build"],
+                                 capture_output=True, text=True,
+                                 input=expr, env=env)
     assert iterate_run.returncode == 0, iterate_run.stderr
 
     analyze_run = subprocess.run(
@@ -241,8 +242,9 @@ def test_analyze_cli_graph_result_is_piped_back_into_to_dot(tmp_path):
                    + os.environ.get("PATH", "")}
     expr = ('range(1,10), [Rule(lambda x: x%3==0, '
             'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
-    iterate_run = subprocess.run(["visiter", "build", expr],
-                                 capture_output=True, text=True, env=env)
+    iterate_run = subprocess.run(["visiter", "build"],
+                                 capture_output=True, text=True,
+                                 input=expr, env=env)
     # Condensation returns an nx.DiGraph; analyze should emit it as a
     # VisIter-schema JSON document so the next stage can to-dot it.
     analyze_run = subprocess.run(

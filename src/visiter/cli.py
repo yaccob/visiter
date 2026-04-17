@@ -89,6 +89,26 @@ def _resolve_imports(specs):
     return bindings
 
 
+def _read_argstring(file):
+    """Read an iterate argstring from a file-like object.
+
+    Strips full-line ``#`` comments (shebang, annotations) so ``.vit``
+    files are directly usable. Trailing ``#`` comments on code lines
+    are NOT stripped — use a separate line for comments.
+
+    Raises ``click.UsageError`` when the result is blank (empty file,
+    all-comment file, empty stdin).
+    """
+    lines = [line for line in file
+             if not line.lstrip().startswith("#")]
+    text = "".join(lines).strip()
+    if not text:
+        raise click.UsageError(
+            "Empty argstring. Pass a .vit file, pipe an expression "
+            "to stdin, or see --help.")
+    return text
+
+
 def _eval_with_source(source, ns):
     """Eval `source` so that inspect.getsource works on its lambdas.
 
@@ -112,12 +132,22 @@ click.rich_click.SHOW_ARGUMENTS = True
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 BUILD_EXAMPLE = """\
-**Example**
+**Examples**
 
 ```
-visiter build 'range(1, 30),
-    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-    default=Op(lambda x: x+2, label="+2")'
+# from a .vit file
+visiter build descent.vit
+
+# from stdin (one-liner)
+echo 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)' \\
+  | visiter build
+
+# heredoc for multi-line
+visiter build <<'VIT'
+range(1, 10),
+[Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+Op(lambda x: x+2, label="+2")
+VIT
 ```
 """
 
@@ -125,7 +155,7 @@ TO_DOT_EXAMPLE = """\
 **Example**
 
 ```
-visiter build '...' | visiter to-dot 'anchor=1, radius=8' | dot -Tsvg > out.svg
+visiter build descent.vit | visiter to-dot 'anchor=1, radius=8' | dot -Tsvg > out.svg
 ```
 """
 
@@ -133,7 +163,7 @@ VALIDATE_EXAMPLE = """\
 **Example**
 
 ```
-visiter build '...' | visiter validate
+visiter build descent.vit | visiter validate
 ```
 """
 
@@ -143,15 +173,15 @@ ANALYZE_EXAMPLE = """\
 Scalars and dicts flow through as JSON:
 
 ```
-visiter build '...' | visiter analyze 'nx.number_of_nodes(graph)'
-visiter build '...' | visiter analyze 'nx.in_degree_centrality(graph)'
+visiter build descent.vit | visiter analyze 'nx.number_of_nodes(graph)'
+visiter build descent.vit | visiter analyze 'nx.in_degree_centrality(graph)'
 ```
 
 If the expression returns a NetworkX graph, it is re-emitted as a
 VisIter graph dict so the next stage can render it:
 
 ```
-visiter build '...' \\
+visiter build descent.vit \\
   | visiter analyze 'nx.condensation(graph)' \\
   | visiter to-dot '' | dot -Tsvg > scc.svg
 ```
@@ -180,18 +210,20 @@ def cli():
 
 
 @cli.command("build", epilog=BUILD_EXAMPLE)
-@click.argument("argstring")
+@click.argument("file", default="-", type=click.File("r"))
 @click.option("--import", "imports", multiple=True, metavar="SPEC",
               help=_IMPORT_HELP)
-def build_cmd(argstring, imports):
+def build_cmd(file, imports):
     """Build an orbit graph and write JSON to stdout.
 
-    ARGSTRING is a Python expression spliced into iterate(<ARGSTRING>)
-    and eval'd (the Python-side name of the graph-building function is
-    `iterate`; this subcommand is its CLI-friendly alias). `Op`, `Rule`,
-    `iterate`, plus `Fraction` and `Decimal` are pre-bound; add more via
-    `--import`.
+    FILE is a `.vit` file containing the Python expression that will be
+    spliced into `iterate(…)` and eval'd. Use `-` or omit to read from
+    stdin. `#`-comment lines are stripped (shebang, annotations).
+
+    `Op`, `Rule`, `iterate`, `Fraction` and `Decimal` are pre-bound in
+    the eval namespace; add more via `--import`.
     """
+    argstring = _read_argstring(file)
     ns = {"Rule": Rule, "Op": Op, "iterate": iterate,
           **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     graph = _eval_with_source(f"iterate({argstring})", ns)
@@ -327,14 +359,16 @@ def analyze_cmd(argstring, input_path, imports):
 
 
 RENDER_EXAMPLE = """\
-**Example**
+**Examples**
 
 ```
-viter 'range(1, 30),
-    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-    default=Op(lambda x: x+2, label="+2")' \\
-  --render 'anchor=1, radius=8, direction="backward"' \\
-  -o descent.svg
+# from a .vit file
+viter descent.vit -o descent.svg
+
+# from stdin
+echo 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)' | viter
+
+# shebang: chmod +x descent.vit && ./descent.vit > out.svg
 ```
 """
 
@@ -346,7 +380,7 @@ _RENDER_DEFAULT_TIME_LIMIT = "00:00:30"
 
 
 @cli.command("render", epilog=RENDER_EXAMPLE)
-@click.argument("argstring")
+@click.argument("file", default="-", type=click.File("r"))
 @click.option("--render", "render_args", default="", metavar="ARGSTRING",
               help="Python expression spliced into to_dot(graph, …). "
                    "Empty means to_dot defaults.")
@@ -358,28 +392,29 @@ _RENDER_DEFAULT_TIME_LIMIT = "00:00:30"
                    "pipe the rendered bytes directly into a viewer.")
 @click.option("--max-nodes", type=int, default=_RENDER_DEFAULT_MAX_NODES,
               show_default=True,
-              help="Safety cap on the BFS node count. Argstring can "
-                   "override by passing `max_nodes=…` explicitly.")
+              help="Safety cap on the BFS node count. The .vit file "
+                   "can override by passing `max_nodes=…` explicitly.")
 @click.option("--max-depth", type=int, default=None,
-              help="Optional BFS depth cap. Argstring can override.")
+              help="Optional BFS depth cap. The .vit file can override.")
 @click.option("--time-limit", default=_RENDER_DEFAULT_TIME_LIMIT,
               show_default=True, metavar="HH:MM:SS",
-              help="Wall-clock limit on the build phase. Argstring "
+              help="Wall-clock limit on the build phase. The .vit file "
                    "can override.")
 @click.option("--import", "imports", multiple=True, metavar="SPEC",
               help=_IMPORT_HELP)
-def render_cmd(argstring, render_args, fmt, output,
+def render_cmd(file, render_args, fmt, output,
                max_nodes, max_depth, time_limit, imports):
     """Run the full pipeline (build → to-dot → Graphviz) in one call.
 
-    ARGSTRING is the same Python expression you'd pass to `build`.
-    --render takes the argstring you'd pass to `to-dot` (optional).
+    FILE is a `.vit` file (or `-` / omitted for stdin) containing the
+    same Python expression you'd pass to `build`. `--render` takes the
+    argstring you'd pass to `to-dot` (optional). `#`-comment lines in
+    the input are stripped (shebang, annotations).
 
-    Niederschwellig entry point: safe defaults (`--max-nodes 10000`,
-    `--time-limit 00:00:30`, `on_limit="stop"` + a warning on stderr
-    when the cap is hit) keep a typo'd rule from running away. Any
-    of the safety caps can be overridden either via CLI flag or by
-    passing the same kwarg explicitly in ARGSTRING.
+    Safe defaults (`--max-nodes 10000`, `--time-limit 00:00:30`,
+    `on_limit="stop"` + a warning on stderr when the cap is hit) keep
+    a typo'd rule from running away. Any safety cap can be overridden
+    via CLI flag or by passing the same kwarg in the `.vit` file.
     """
     from pathlib import Path
 
@@ -407,6 +442,7 @@ def render_cmd(argstring, render_args, fmt, output,
             )
         return g
 
+    argstring = _read_argstring(file)
     build_ns = {"Rule": Rule, "Op": Op, "iterate": _iterate_with_caps,
                 **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     graph = _eval_with_source(f"iterate({argstring})", build_ns)

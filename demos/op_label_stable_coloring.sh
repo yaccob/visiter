@@ -18,37 +18,34 @@ OUT="$HERE/out"
 mkdir -p "$OUT"
 
 # (a) Baseline: x // 3 + x + 2 default.
-visiter build '
+visiter build <<'VIT' | visiter to-dot 'anchor=1, radius=10, direction="backward"' | dot -Tsvg -o "$OUT/stable_a_baseline.svg"
 range(1, 30),
 [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-default=Op(lambda x: x + 2)' \
-  | visiter to-dot 'anchor=1, radius=10, direction="backward"' \
-  | dot -Tsvg -o "$OUT/stable_a_baseline.svg"
+Op(lambda x: x + 2)
+VIT
 echo "wrote $OUT/stable_a_baseline.svg     (x // 3 = blue, x + 2 = orange)"
 
 # (b) Append a third rule: x // 5 for multiples of 5.
-visiter build '
+visiter build <<'VIT' | visiter to-dot 'anchor=1, radius=10, direction="backward"' | dot -Tsvg -o "$OUT/stable_b_appended.svg"
 range(1, 30),
 [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3)),
  Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5))],
-default=Op(lambda x: x + 2)' \
-  | visiter to-dot 'anchor=1, radius=10, direction="backward"' \
-  | dot -Tsvg -o "$OUT/stable_b_appended.svg"
+Op(lambda x: x + 2)
+VIT
 echo "wrote $OUT/stable_b_appended.svg     (x // 3 still blue, x // 5 next slot, x + 2 last)"
 
 # (c) Insert x // 5 BEFORE x // 3, with op_colors pinning by identity
 #     to keep the pre-existing colors in place. Without the pin,
 #     x // 3 would shift palette slots; with it, the visual identity
 #     holds.
-visiter build '
-range(1, 30),
-[Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
- Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-default=Op(lambda x: x + 2)' \
-  | visiter to-dot 'op_colors={
+visiter build <<'VIT' | visiter to-dot 'op_colors={
       "x // 3": ("#ccddff", "#6688bb"),
       "x + 2": ("#ffddcc", "#ddbb99"),
       "x // 5": ("#cceecc", "#77aa77"),
-    }, anchor=1, radius=10, direction="backward"' \
-  | dot -Tsvg -o "$OUT/stable_c_inserted_with_pin.svg"
+    }, anchor=1, radius=10, direction="backward"' | dot -Tsvg -o "$OUT/stable_c_inserted_with_pin.svg"
+range(1, 30),
+[Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
+ Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+Op(lambda x: x + 2)
+VIT
 echo "wrote $OUT/stable_c_inserted_with_pin.svg (colors pinned via op_colors)"

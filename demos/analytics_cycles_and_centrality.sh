@@ -18,7 +18,7 @@ mkdir -p "$OUT"
 DATA="$OUT/descent.json"
 EXPR="$(cat "$HERE/data/descent.expr")"
 
-visiter build "$EXPR" > "$DATA"
+echo "$EXPR" | visiter build > "$DATA"
 
 visiter to-dot '' < "$DATA" | dot -Tsvg -o "$OUT/descent.svg"
 echo "wrote $OUT/descent.svg"
