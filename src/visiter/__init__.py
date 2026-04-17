@@ -2,7 +2,7 @@
 
 Public API:
 
-    iterate(start, rules, *, default, max_depth=None, max_nodes=..., ...)
+    iterate(start, rules, default, *, max_depth=None, max_nodes=..., ...)
         Build a graph by applying guard-and-operation Rules from each start
         via BFS, tracking per-node depth and optional pseudo-edges for
         structural bounds.

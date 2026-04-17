@@ -75,9 +75,16 @@ def test_max_nodes_stop_returns_partial():
     assert len(g["nodes"]) == 10
 
 
-def test_default_required_keyword():
+def test_default_is_required():
+    # default has no Python default value — omitting it raises TypeError.
     with pytest.raises(TypeError):
         iterate([1], rules=descent_rules())
+
+
+def test_default_accepted_positionally():
+    # default= can now be passed as the third positional argument.
+    g = iterate([1], descent_rules(), descent_default())
+    assert set(g["nodes"].keys()) == {"1", "3"}
 
 
 def test_tags_recorded_when_predicate_matches():

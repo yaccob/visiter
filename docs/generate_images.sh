@@ -13,6 +13,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 have visiter || { echo "visiter not on PATH" >&2; exit 2; }
 have dot     || { echo "graphviz (dot) not on PATH" >&2; exit 2; }
 
+# --- README quickstart ---
+
+visiter build 'range(1, 10),
+  [Rule(lambda x: x%3==0, Op(lambda x: x//3))],
+  Op(lambda x: x+2)' \
+  | visiter to-dot '' | dot -Tsvg > "$OUT/readme_quickstart.svg"
+
 # --- tutorial ---
 
 # simplest — auto-derived labels ("x // 3", "x + 2"), no manual labels.

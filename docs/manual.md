@@ -94,7 +94,7 @@ A `default: Op | None` argument to `iterate` (see below) covers the
 ### Signature
 
 ```python
-iterate(start, rules, *, default,
+iterate(start, rules, default, *,
         max_depth=None,
         max_nodes=1_000_000,
         time_limit=None,
@@ -108,9 +108,10 @@ iterate(start, rules, *, default,
   at depth 0.
 - `rules`: an iterable of `Rule`. Order matters — it determines
   `op_order` (which controls palette assignment in `to_dot`).
-- `default`: an `Op` or `None` (**required**, no Python default value
-  — the caller must explicitly choose). Fires only when no rule's
-  `condition` matches at a given node.
+- `default`: an `Op` or `None` (**required** — the caller must
+  explicitly choose). May be passed positionally as the third argument
+  or as a keyword. Fires only when no rule's `condition` matches at
+  a given node.
 - `max_depth`: optional BFS-depth cap. Nodes at depth `max_depth` are
   kept but not expanded; their would-fire rules become pseudo-edges.
   `None` (default) disables the cap.
@@ -548,10 +549,13 @@ same kwarg explicitly in `ARGSTRING` (argstring always wins over
 CLI flag, via `dict.setdefault` semantics).
 
 ```bash
-# Minimal: one rule, one default, safe defaults, write SVG.
+# Simplest form: auto-derived labels, no label= needed, stdout output.
+viter 'range(1, 30), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)'
+
+# Explicit labels + write to file:
 viter 'range(1, 30),
        [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-       default=Op(lambda x: x+2, label="+2")' \
+       Op(lambda x: x+2, label="+2")' \
   -o descent.svg
 
 # Add to_dot options via --render:

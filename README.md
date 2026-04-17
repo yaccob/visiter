@@ -1,22 +1,19 @@
 # VisIter
 
-Build and visualize orbit graphs for discrete iterations under guarded rules.
+See what a discrete iteration actually does — as a graph.
 
-VisIter is a small library that does two complementary things:
+## The simplest case
 
-1. **`iterate(start, rules, default=..., max_depth=..., ...)`** —
-   applies a list of guard-and-operation Rules to seed values via BFS,
-   producing a graph (nodes, edges, per-node depth, optional pseudo-edges
-   marking structural boundaries).
+Integers 1–9. Rule: divisible by 3 → divide by 3. Everything
+else → add 2. Where does each value end up?
 
-2. **`to_dot(graph, ...)`** — turns the graph into a Graphviz
-   Digraph for SVG/HTML/PDF rendering, with anchor/radius cropping,
-   per-rule edge coloring, wedged-pie node fills for branching nodes,
-   and dashed ghost stubs at every kind of cut boundary.
+```bash
+viter 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)'
+```
 
-The two are independent: any graph dict that fits the documented shape
-can be rendered, and `iterate` can be used purely for graph construction
-without ever touching the renderer.
+![descent graph, range 1–9](docs/images/readme_quickstart.svg)
+
+One line, auto-derived edge labels, SVG on stdout.
 
 ## Install
 
@@ -24,125 +21,64 @@ without ever touching the renderer.
 pip install visiter
 ```
 
-Graphviz must be available on `PATH` for image rendering (the Python
-`graphviz` package wraps the system tool).
+Graphviz must be available on `PATH` (`brew install graphviz` /
+`apt install graphviz`).
 
-## Quickstart — descent with divisor rule
+## Going further
 
-A rule that divides by three when applicable, with a `+2` fallback for
-all other values. Every integer path eventually joins one of two small
-cycles (`1 → 3 → 1`, `2 → 4 → 6 → 2`).
-
-```python
-from visiter import iterate, Op, Rule, to_dot
-
-graph = iterate(
-    start=range(1, 30),
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-    default=Op(lambda x: x + 2, label="+2"),
-)
-dot = to_dot(graph, anchor=1, radius=8, direction="backward")
-dot.render("descent", format="svg")
-```
-
-## Quickstart — reverse binary tree with bound
-
-Generate every positive integer up to a ceiling as the binary tree of
-`×2` / `×2+1` successors of 1. `Rule.bound` keeps the expansion inside
-the ceiling; to_dot draws the frontier as dashed ghost stubs.
-
-```python
-from visiter import iterate, Op, Rule, to_dot
-
-ceiling = 64
-
-graph = iterate(
-    start=[1],
-    rules=[
-        Rule(lambda x: True,
-             Op(lambda x: 2 * x, label="×2"),
-             bound=lambda x: 2 * x <= ceiling),
-        Rule(lambda x: True,
-             Op(lambda x: 2 * x + 1, label="×2+1"),
-             bound=lambda x: 2 * x + 1 <= ceiling),
-    ],
-    default=None,
-)
-dot = to_dot(graph, show_binary=True)
-dot.render("binary_tree", format="svg")
-```
-
-## CLI
-
-Two entry points, same Python API underneath:
-
-- **`viter`** — one-shot alias for the full pipeline. Takes the
-  `iterate` argstring and writes the rendered image directly.
-  Safe defaults (`--max-nodes 10000`, `--time-limit 00:00:30`, stop
-  with a warning on overflow) keep a typo'd rule from running away.
-- **`visiter`** — pipe-composable subcommands (`build`, `to-dot`,
-  `validate`, `analyze`, `render`) for when you want to save the JSON,
-  validate it, run NetworkX over it, or render the same data multiple
-  ways.
-
-Quickstart via `viter`:
+Add explicit labels, write to a file:
 
 ```bash
-viter 'range(1, 30),
+viter 'range(1, 10),
        [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-       default=Op(lambda x: x+2, label="+2")' \
-  --render 'anchor=1, radius=8, direction="backward"' \
+       Op(lambda x: x+2, label="+2")' \
   -o descent.svg
 ```
 
-Same thing via the `visiter` pipeline (JSON on the wire, no safety
-caps — spelled out for full control):
+Crop the view around a node, render only what reaches it:
 
 ```bash
-visiter build 'range(1, 30),
-               [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-               default=Op(lambda x: x+2, label="+2")' \
-  | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
-  | dot -Tsvg > descent.svg
+viter '...' --render 'anchor=1, radius=8, direction="backward"' -o crop.svg
 ```
 
-The `validate` subcommand checks a graph JSON document against the
-bundled JSON Schema (`schemas/v1/graph.schema.json`, Draft 2020-12):
+Use the Python API instead of the CLI:
 
-```bash
-pip install visiter[validate]
-visiter build '...' | visiter validate
+```python
+from visiter import iterate, Op, Rule, to_dot
+
+graph = iterate(
+    range(1, 10),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+)
+to_dot(graph).render("descent", format="svg")
 ```
 
-The `analyze` subcommand bridges to [NetworkX](https://networkx.org/)
-so you can run any of its hundreds of graph algorithms on the output
-(cycles, shortest paths, centrality, strongly-connected components,
-...) — and when the algorithm returns a NetworkX graph itself, it
-flows straight back into `visiter to-dot`:
+## Two entry points
 
-```bash
-pip install visiter[analytics]
-visiter build '...' \
-  | visiter analyze 'nx.condensation(graph)' \
-  | visiter to-dot '' | dot -Tsvg > scc.svg
-```
+- **`viter`** — one-shot: argstring in, image out. Safe defaults
+  (`--max-nodes 10000`, `--time-limit 00:00:30`) keep a typo'd rule
+  from running away. Output goes to stdout (pipe it!) or to `-o FILE`.
+- **`visiter`** — pipe-composable subcommands for full control:
+
+  ```bash
+  visiter build '…' | visiter to-dot '…' | dot -Tsvg > out.svg
+  ```
+
+  `build` writes JSON; `to-dot` reads JSON, writes DOT; `validate`
+  checks the JSON against the bundled schema; `analyze` bridges to
+  [NetworkX](https://networkx.org/) for graph algorithms.
 
 ## Why VisIter?
 
-The short pitch: VisIter is **free, scriptable, Graphviz-native,
-Unix-pipe-composable orbit-graph rendering for discrete iterations
-under guarded rules** — with cutoff boundaries (bounds, depth limits,
-render crops) as a first-class visual primitive, not silent truncation.
+**Free, scriptable, Graphviz-native, Unix-pipe-composable orbit-graph
+rendering for discrete iterations under guarded rules** — with cutoff
+boundaries (bounds, depth limits, render crops) as a first-class
+visual primitive, not silent truncation.
 
-If you have a Mathematica license, `NestGraph` covers the core BFS.
-For term rewriting with equational theories, use Maude. For
-Petri-net reachability, LoLA. For generic graph analytics, NetworkX.
-For the specific combination of "Python + rule-driven reachability
-from a seed + opinionated rendering + shell pipes", the niche is
-small but real.
-
-Full honest comparison against NetworkX, NestGraph, Maude, LoLA, and
-continuous-dynamics tooling: **[docs/comparison.md](docs/comparison.md)**.
+Full honest comparison against NetworkX, NestGraph (Mathematica),
+Maude, LoLA, and continuous-dynamics tooling:
+**[docs/comparison.md](docs/comparison.md)**.
 
 ## Documentation
 

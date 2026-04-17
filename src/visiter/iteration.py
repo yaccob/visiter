@@ -242,7 +242,7 @@ def parse_range(s):
     return result
 
 
-def iterate(start, rules, *, default, max_depth=None,
+def iterate(start, rules, default, *, max_depth=None,
             max_nodes=1_000_000, time_limit=None,
             on_limit="raise", tags=None, key_type=None):
     """Build a graph by applying rules repeatedly from each starting value.
