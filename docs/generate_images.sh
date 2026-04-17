@@ -235,4 +235,88 @@ max_depth=7,
 key_type="number"
 VIT
 
+# --- manual: §7 NetworkX — water jug example ---
+# Two SVGs: full reachability graph (target states highlighted) and
+# shortest-path subgraph (solution). Re-uses the demo helpers.
+
+PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' > /tmp/visiter_jugs.json
+import json, sys
+from water_jugs import make_rules, state_label
+from visiter import iterate
+
+graph = iterate([(0, 0)], make_rules(3, 5), None)
+
+for key, info in graph["nodes"].items():
+    state = tuple(int(x) for x in key.strip("()").split(", "))
+    info["display"] = state_label(state, target=4)
+    if state[0] == 4 or state[1] == 4:
+        info.setdefault("tags", []).append("highlight")
+
+for e in graph["edges"]:
+    e["from"] = str(e["from"])
+    e["to"] = str(e["to"])
+
+json.dump(graph, sys.stdout, default=str)
+PY
+
+visiter to-dot 'node_label_attr="display"' \
+  < /tmp/visiter_jugs.json | dot -Tsvg > "$OUT/water_jugs_full.svg"
+
+python3 - /tmp/visiter_jugs.json <<'PY' \
+  | visiter to-dot 'node_label_attr="display"' \
+  | dot -Tsvg > "$OUT/water_jugs_path.svg"
+import json, sys
+import networkx as nx
+
+graph = json.load(open(sys.argv[1]))
+g = nx.DiGraph()
+for key in graph["nodes"]:
+    g.add_node(key)
+for e in graph["edges"]:
+    g.add_edge(str(e["from"]), str(e["to"]), op=e["op"])
+
+source = "(0, 0)"
+targets = [n for n in g.nodes
+           if any(int(x) == 4 for x in n.strip("()").split(", "))]
+best_len = None
+all_paths = []
+for t in targets:
+    try:
+        paths = list(nx.all_shortest_paths(g, source, t))
+    except nx.NetworkXNoPath:
+        continue
+    plen = len(paths[0])
+    if best_len is None or plen < best_len:
+        best_len = plen
+        all_paths = paths
+    elif plen == best_len:
+        all_paths.extend(paths)
+
+path_nodes = set()
+path_edges = set()
+for path in all_paths:
+    path_nodes.update(path)
+    for i in range(len(path) - 1):
+        path_edges.add((path[i], path[i + 1]))
+
+sub = {
+    "schema_version": "1",
+    "roots": [source],
+    "nodes": {},
+    "edges": [],
+    "pseudo_edges": [],
+    "op_order": graph.get("op_order", []),
+    "op_labels": graph.get("op_labels", {}),
+}
+for key in path_nodes:
+    info = dict(graph["nodes"][key])
+    sub["nodes"][key] = info
+for src, dst in path_edges:
+    sub["edges"].append({"from": src, "to": dst, "op": g.edges[src, dst]["op"]})
+
+json.dump(sub, sys.stdout, default=str)
+PY
+
+rm -f /tmp/visiter_jugs.json
+
 echo "Regenerated $(ls "$OUT"/*.svg | wc -l | tr -d ' ') SVGs in $OUT/"

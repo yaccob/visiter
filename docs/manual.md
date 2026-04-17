@@ -949,6 +949,30 @@ See [`demos/analytics_cycles_and_centrality.sh`](../demos/analytics_cycles_and_c
 and [`demos/analytics_shortest_paths_highlighted.sh`](../demos/analytics_shortest_paths_highlighted.sh)
 for runnable end-to-end examples.
 
+### Worked example: water jug shortest path
+
+The classic "Die Hard 3" puzzle: measure exactly 4 litres with a 3L
+and a 5L jug. Six actions (fill, empty, pour) build a 16-node
+reachability graph from `(0, 0)`. The graph has non-trivial cycles
+because the actions are not self-inverse (fill ≠ empty).
+
+The full graph, with target states (where either jug holds 4)
+highlighted:
+
+![water jug — full reachability graph](images/water_jugs_full.svg)
+
+The solution is the shortest path from `(0, 0)` to any target node.
+`nx.all_shortest_paths` finds it; extracting the path nodes and edges
+into a subgraph and piping that through `to-dot` renders the answer
+as a standalone image:
+
+![water jug — shortest path to 4L](images/water_jugs_path.svg)
+
+Bold cell values mark the target amount; the darkened node is the
+goal state where the path ends. The full pipeline (build → analyze →
+subgraph → render) is in
+[`demos/water_jugs.sh`](../demos/water_jugs.sh).
+
 ### Scope
 
 The bridge is deliberately thin: two Python functions plus one CLI

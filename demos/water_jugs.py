@@ -54,11 +54,19 @@ def make_rules(cap_a, cap_b):
     ]
 
 
-def state_label(state):
-    """Format a (a, b) state as an HTML table for Graphviz display."""
+def state_label(state, target=None):
+    """Format a (a, b) state as an HTML table for Graphviz display.
+
+    When *target* is given, any cell whose value equals the target is
+    rendered in bold — a visual marker for "this jug holds the goal
+    amount", independent of the highlight tag (which marks the
+    shortest-path nodes via fill-darkening).
+    """
     a, b = state
+
+    def _cell(val):
+        display = f"<B>{val}</B>" if target is not None and val == target else str(val)
+        return f'<TD WIDTH="20" HEIGHT="18" FIXEDSIZE="TRUE">{display}</TD>'
+
     return (f'<<TABLE BORDER="0" CELLSPACING="2" CELLPADDING="2">'
-            f'<TR>'
-            f'<TD WIDTH="20" HEIGHT="18" FIXEDSIZE="TRUE">{a}</TD>'
-            f'<TD WIDTH="20" HEIGHT="18" FIXEDSIZE="TRUE">{b}</TD>'
-            f'</TR></TABLE>>')
+            f'<TR>{_cell(a)}{_cell(b)}</TR></TABLE>>')
