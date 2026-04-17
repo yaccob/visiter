@@ -278,7 +278,7 @@ agree on the type. See
 a string-valued example (drop trailing vowels until none remain).
 
 A few `to_dot` features are intrinsically integer-specific —
-`show_binary`, `show_ternary`, `show_factors`, and `value_range`. If
+`show_binary`, `show_factors`, and `value_range`. If
 you turn them on for a non-integer graph, they emit a warning and are
 silently skipped; everything else still renders normally.
 

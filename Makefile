@@ -2,13 +2,14 @@ VENV := .venv
 VENV_BIN := $(VENV)/bin
 VENV_STAMP := $(VENV)/.installed
 
-.PHONY: setup test demo build publish test-publish check-version clean help
+.PHONY: setup test demo docs build publish test-publish check-version clean help
 
 help:
 	@echo "Targets:"
 	@echo "  setup         create venv and install package + dev deps"
 	@echo "  test          run pytest"
 	@echo "  demo          run all demos/*.sh (writes to demos/out/)"
+	@echo "  docs          regenerate all embedded SVGs in docs/"
 	@echo "  build         build sdist + wheel into dist/"
 	@echo "  check-version verify pyproject version isn't already on PyPI"
 	@echo "                (REPOSITORY=pypi|testpypi, default pypi)"
@@ -34,6 +35,11 @@ demo: setup
 	    PATH="$(CURDIR)/$(VENV_BIN):$$PATH" bash "$$s" || exit 1; \
 	done
 	@echo "all demos succeeded — see demos/out/"
+
+docs: setup
+	@command -v dot >/dev/null || { echo "docs require 'dot' (Graphviz) on PATH"; exit 1; }
+	PATH="$(CURDIR)/$(VENV_BIN):$$PATH" bash docs/generate_images.sh
+	@echo "docs SVGs regenerated — see docs/images/"
 
 build: setup clean
 	$(VENV_BIN)/python -m build

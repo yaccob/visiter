@@ -356,6 +356,10 @@ def build(start, rules, default, *, max_depth=None,
         if prior_label == op.label:
             return
         import warnings
+        # stacklevel=3: warn → _register_op → build() body → user's
+        # call to build().  Fragile if the nesting depth changes — if
+        # _register_op is inlined, drop to 2; if an intermediate helper
+        # is added between build() and _register_op, raise to 4.
         warnings.warn(
             f"Op id collision on {op.id!r}: "
             f"two distinct callables produce the same id "

@@ -164,16 +164,6 @@ def test_show_factors_warns_and_skips_for_non_int_values():
     assert "banana" in src
 
 
-def test_show_ternary_warns_and_skips_for_non_int_values():
-    import warnings
-    g = make_string_graph()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        src = to_dot(g, show_ternary=True).source
-    assert any("show_ternary" in str(w.message) for w in caught)
-    assert "banana" in src
-
-
 def test_value_range_warns_and_skips_for_non_int_values():
     import warnings
     g = make_string_graph()

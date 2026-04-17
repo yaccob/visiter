@@ -243,7 +243,7 @@ to_dot(graph, *, op_labels=None,
              anchor=None, radius=None, direction="forward",
              value_range=None,
              op_colors=None, palette=None,
-             show_binary=False, show_ternary=False, show_factors=False,
+             show_binary=False, show_factors=False,
              time_limit=None, on_limit="raise")
 ```
 
@@ -273,9 +273,8 @@ Returns a `graphviz.Digraph`. Caller decides what to do with it
   for explicit pinning.
 - `palette`: optional sequence of palette entries (string or tuple, as
   above). Replaces `DEFAULT_OP_PALETTE` for unmapped ops.
-- `show_binary` / `show_ternary` / `show_factors`: extra annotations
-  under each node label. Binary uses 4-bit nibble grouping; ternary
-  uses 3-trit grouping (analogue of nibbles → hex / trits → base 27).
+- `show_binary` / `show_factors`: extra annotations under each node
+  label. Binary uses 4-bit nibble grouping.
 - `time_limit`, `on_limit`: bound the pure-Python build phase
   (BFS cropping + DOT loops + ghost emission). Independent of any
   subprocess-level Graphviz layout timeout.
@@ -794,7 +793,7 @@ without Python-specific knowledge. The Python → JSON mapping is:
 `object`, `None` → `null`; anything else falls back to `string` via
 the default `str()` coercion. The renderer consults `key_type`
 directly when deciding whether type-sensitive features
-(`show_binary`, `show_ternary`, `show_factors`, `value_range`)
+(`show_binary`, `show_factors`, `value_range`)
 should fire — no string-pattern heuristic is involved. Hand-built
 graph dicts and producers other than `build` must supply
 `key_type` themselves; the schema enforces this via `required`.

@@ -6,6 +6,8 @@ import warnings
 
 from sympy import factorint
 
+_SUP_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+
 
 def _is_int_str(s):
     return bool(re.fullmatch(r"-?(0|[1-9][0-9]*)", s))
@@ -60,8 +62,6 @@ def check_deadline(deadline, on_limit, partial_value, where):
     if on_limit == "raise":
         raise RuntimeError(f"render time_limit reached {where}")
     return partial_value
-
-_SUP_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 
 # Fallback palette. Each slot is (fill_color, edge_color): a light pastel for
 # node fills (readable labels) and a more saturated variant for edges (thin
@@ -169,27 +169,6 @@ def format_binary(v):
     return "\u2009".join(reversed(chunks))
 
 
-def format_ternary(v):
-    """Return v's ternary representation grouped in 3-trit blocks.
-
-    3-trit grouping is the ternary analogue of 4-bit nibbles (base-2 → base-16):
-    each block corresponds to one base-27 digit.
-    """
-    if v <= 0:
-        return "0"
-    digits = []
-    while v > 0:
-        digits.append(str(v % 3))
-        v //= 3
-    s = "".join(reversed(digits))
-    chunks = []
-    while len(s) > 3:
-        chunks.append(s[-3:])
-        s = s[:-3]
-    chunks.append(s)
-    return "\u2009".join(reversed(chunks))
-
-
 def format_op_label(op):
     """Format an operation string for display with Unicode operators."""
     m = re.match(r'^/(\d+)$', op)
@@ -208,13 +187,11 @@ def format_op_label(op):
 
 
 def _label_attrs(vstr, display, is_int_key,
-                 show_binary, show_ternary, show_factors):
+                 show_binary, show_factors):
     extras = []
     int_v = int(vstr) if is_int_key else None
     if show_binary and int_v is not None:
         extras.append(format_binary(int_v))
-    if show_ternary and int_v is not None:
-        extras.append(format_ternary(int_v))
     if show_factors and int_v is not None:
         extras.append(format_prime_factors(int_v))
     if extras:
@@ -224,8 +201,7 @@ def _label_attrs(vstr, display, is_int_key,
 
 
 def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
-               show_ternary=False, show_factors=False, display=None,
-               is_int_key=False):
+               show_factors=False, display=None, is_int_key=False):
     """Build Graphviz node attributes from a node key and its outgoing edges.
 
     Fill is driven by the node's outgoing edges:
@@ -235,14 +211,13 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
 
     `highlight` darkens each fill color and switches the font to white.
 
-    Int-only annotations (`show_binary`, `show_ternary`, `show_factors`)
-    are silently skipped when `vstr` is not an integer-valued key; the
-    caller (build_dot) emits a single aggregate warning rather than one
-    per node.
+    Int-only annotations (`show_binary`, `show_factors`) are silently
+    skipped when `vstr` is not an integer-valued key; the caller
+    (build_dot) emits a single aggregate warning rather than one per node.
     """
     attrs = _label_attrs(vstr, display if display is not None else vstr,
                          is_int_key,
-                         show_binary, show_ternary, show_factors)
+                         show_binary, show_factors)
     colors = [darken(c) for c in out_op_colors] if hl else list(out_op_colors)
     if len(colors) == 1:
         attrs.update(style="filled", fillcolor=colors[0])
@@ -254,7 +229,7 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
 
 
 def build_dot(graph, op_labels,
-              show_binary=False, show_ternary=False, show_factors=False,
+              show_binary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
               resolved=None,
               deadline=None, on_limit="raise",
@@ -303,7 +278,6 @@ def build_dot(graph, op_labels,
     has_non_int = any(info["key_type"] != "integer"
                       for info in graph["nodes"].values())
     for flag_name, flag in (("show_binary", show_binary),
-                            ("show_ternary", show_ternary),
                             ("show_factors", show_factors)):
         if flag and has_non_int:
             warnings.warn(
@@ -336,7 +310,7 @@ def build_dot(graph, op_labels,
             display = _format_label_value(info[node_label_attr])
         is_int_key = info["key_type"] == "integer"
         attrs = node_attrs(vstr, fill_colors, hl=hl,
-                           show_binary=show_binary, show_ternary=show_ternary,
+                           show_binary=show_binary,
                            show_factors=show_factors, display=display,
                            is_int_key=is_int_key)
         if vstr in roots:

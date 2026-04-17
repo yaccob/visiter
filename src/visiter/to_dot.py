@@ -49,7 +49,7 @@ def to_dot(graph, *, op_labels=None,
                  anchor=None, radius=None, direction="forward",
                  value_range=None,
                  op_colors=None, palette=None,
-                 show_binary=False, show_ternary=False, show_factors=False,
+                 show_binary=False, show_factors=False,
                  node_label=None, node_label_attr=None,
                  time_limit=None, on_limit="raise"):
     """Render a graph dict (from `build`) as a Graphviz Digraph.
@@ -75,9 +75,7 @@ def to_dot(graph, *, op_labels=None,
         op_colors: optional {op: color or (fill, edge)} — pins operation
             colors. See resolve_op_colors.
         palette: optional color sequence used for ops not in `op_colors`.
-        show_binary / show_ternary / show_factors: extra node annotations.
-            show_ternary groups digits in 3-trit blocks (base-2 nibbles →
-            base-16; base-3 trits → base-27).
+        show_binary / show_factors: extra node annotations.
         node_label: optional callable ``(key: str, info: dict) → str``
             that produces the display label for each node. When given,
             takes priority over ``node_label_attr``. The return value
@@ -179,8 +177,7 @@ def to_dot(graph, *, op_labels=None,
 
     resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
     dot = build_dot(graph, effective_labels,
-                    show_binary=show_binary, show_ternary=show_ternary,
-                    show_factors=show_factors,
+                    show_binary=show_binary, show_factors=show_factors,
                     op_colors=op_colors, palette=palette,
                     extra_out_ops=extra_out_ops,
                     resolved=resolved,
