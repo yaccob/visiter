@@ -7,9 +7,10 @@ Public API:
         via BFS, tracking per-node depth and optional pseudo-edges for
         structural bounds.
 
-    Op(func, label)
-        An operation: a callable taking the current value, plus a label
-        used for edge display and color keying.
+    Op(func, *, label=None, id=None)
+        An operation: a callable taking the current value, plus
+        keyword-only fields — `label` (display string) and `id`
+        (stable key for `op_order` and `op_colors` pinning).
 
     Rule(condition, op, bound=None)
         A guarded operation. Condition decides applicability; optional

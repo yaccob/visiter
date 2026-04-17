@@ -43,7 +43,7 @@ def test_subcommand_help_works(sub):
 
 def test_iterate_pipeline_still_works():
     expr = ('range(1,8), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, "÷3"))], default=Op(lambda x: x+2, "+2")')
+            'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
     r = run("build", expr)
     assert r.returncode == 0, r.stderr
     assert '"schema_version": "1"' in r.stdout
@@ -52,7 +52,7 @@ def test_iterate_pipeline_still_works():
 
 def test_validate_pipeline_still_works():
     expr = ('range(1,5), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, "÷3"))], default=Op(lambda x: x+2, "+2")')
+            'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
     build = run("build", expr)
     assert build.returncode == 0
     validate = run("validate", input_=build.stdout)
@@ -80,7 +80,7 @@ def test_iterate_fraction_default_import():
     # Fraction is in the default eval namespace, so stdlib rationals
     # work on the CLI without any --import boilerplate.
     expr = ('[Fraction(1)], rules=[Rule(lambda x: True, '
-            'Op(lambda x: 1 + 1/x, "step"))], default=None, '
+            'Op(lambda x: 1 + 1/x, label="step"))], default=None, '
             'max_depth=3, key_type="number"')
     r = run("build", expr)
     assert r.returncode == 0, r.stderr
@@ -98,7 +98,7 @@ def test_iterate_decimal_default_import():
 def test_iterate_import_option_binds_module_attribute():
     # `--import math:sqrt` makes sqrt available in the eval namespace.
     expr = ('[16], rules=[Rule(lambda x: x > 2, '
-            'Op(lambda x: int(sqrt(x)), "sqrt"))], default=None, max_nodes=5')
+            'Op(lambda x: int(sqrt(x)), label="sqrt"))], default=None, max_nodes=5')
     r = run("build", "--import", "math:sqrt", expr)
     assert r.returncode == 0, r.stderr
     assert '"4"' in r.stdout  # 16 → 4 → 2
@@ -107,7 +107,7 @@ def test_iterate_import_option_binds_module_attribute():
 def test_iterate_import_option_multiple_names():
     # Comma-separated names on one --import.
     expr = ('[10], rules=[Rule(lambda x: x > 0, '
-            'Op(lambda x: floor(sqrt(x)), "floor sqrt"))], '
+            'Op(lambda x: floor(sqrt(x)), label="floor sqrt"))], '
             'default=None, max_nodes=5')
     r = run("build", "--import", "math:sqrt,floor", expr)
     assert r.returncode == 0, r.stderr
@@ -116,7 +116,7 @@ def test_iterate_import_option_multiple_names():
 def test_iterate_import_option_module_itself():
     # Bare `MODULE` binds the module; use dotted access in the argstring.
     expr = ('[16], rules=[Rule(lambda x: x > 2, '
-            'Op(lambda x: int(math.sqrt(x)), "sqrt"))], default=None, max_nodes=5')
+            'Op(lambda x: int(math.sqrt(x)), label="sqrt"))], default=None, max_nodes=5')
     r = run("build", "--import", "math", expr)
     assert r.returncode == 0, r.stderr
 
@@ -147,7 +147,7 @@ def test_iterate_pipeline_multiline_argstring_auto_labels():
     # on the 3rd line would otherwise return a syntactically incomplete
     # fragment that `ast.parse` refuses.
     expr = ('range(1, 8),\n'
-            '[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],\n'
+            '[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],\n'
             'default=Op(lambda x: x + 2)')
     r = run("build", expr)
     assert r.returncode == 0, r.stderr

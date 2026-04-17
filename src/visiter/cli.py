@@ -116,8 +116,8 @@ BUILD_EXAMPLE = """\
 
 ```
 visiter build 'range(1, 30),
-    [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-    default=Op(lambda x: x+2, "+2")'
+    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+    default=Op(lambda x: x+2, label="+2")'
 ```
 """
 

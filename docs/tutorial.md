@@ -67,12 +67,12 @@ passed. `Op(func)` derives a label from its callable: the function's
 `__name__` for named functions, or the lambda body rendered via
 `ast.unparse` for lambdas. That covers most cases with no typing.
 
-When you want something shorter, nicer, or non-ASCII, pass the label
-explicitly as the second argument:
+When you want something shorter, nicer, or non-ASCII, pass `label=`
+explicitly (it's keyword-only — only `func` is positional):
 
 ```python
-Op(lambda x: x // 3, "÷3")
-Op(lambda x: x + 2, "+2")
+Op(lambda x: x // 3, label="÷3")
+Op(lambda x: x + 2, label="+2")
 ```
 
 ![same graph, custom labels](images/custom_labels.svg)
@@ -278,8 +278,8 @@ function call.
 
 ```bash
 visiter build 'range(1, 30),
-                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-                 default=Op(lambda x: x+2, "+2")' \
+                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+                 default=Op(lambda x: x+2, label="+2")' \
   | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
   | dot -Tsvg > descent.svg
 ```

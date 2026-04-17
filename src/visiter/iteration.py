@@ -109,11 +109,17 @@ class Op(namedtuple("_Op", ["func", "label", "id"])):
       with accidentally-equal labels but different ``func`` don't
       collide silently.
 
-    Both ``label`` and ``id`` are optional. Pass ``id=`` explicitly
-    when you want to split two ops whose auto-derived id coincides
-    (e.g. two lambdas whose bodies happen to unparse the same way),
-    when you want a stable pin target that survives func refactors,
-    or simply when you prefer a short custom string.
+    Both ``label`` and ``id`` are optional and **keyword-only** —
+    only ``func`` is accepted positionally. That prevents the ambiguity
+    that two adjacent positional strings would invite (which of them is
+    the label, which the id?) and makes the intent of an overriding
+    label or id visible at the call site: ``Op(f, label="÷3", id="div3")``.
+
+    Pass ``id=`` explicitly when you want to split two ops whose
+    auto-derived id coincides (e.g. two lambdas whose bodies happen
+    to unparse the same way), when you want a stable pin target that
+    survives func refactors, or simply when you prefer a short custom
+    string.
 
     When ``_derive_label(func)`` can't recover a source representation
     (REPL lambdas, ``functools.partial``, C extensions) the label
@@ -123,7 +129,7 @@ class Op(namedtuple("_Op", ["func", "label", "id"])):
     """
     __slots__ = ()
 
-    def __new__(cls, func, label=None, id=None):
+    def __new__(cls, func, *, label=None, id=None):
         derived = None
         derive_error = None
         if label is None or id is None:

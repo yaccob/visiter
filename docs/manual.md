@@ -18,16 +18,19 @@ patterns. For the absolute minimum, see [README.md](../README.md).
 
 ## 1. Data model
 
-### `Op(func, label=None, id=None)`
+### `Op(func, *, label=None, id=None)`
 
 A pure operation: a callable plus two string fields — a display
-**`label`** and a stable **`id`** used for keying.
+**`label`** and a stable **`id`** used for keying. Only `func` is
+accepted positionally; `label` and `id` are keyword-only, to keep
+the intent of an override visible at the call site and avoid the
+ambiguity of two adjacent unnamed strings.
 
 ```python
-Op(lambda x: x // 2)                       # label = id = "x // 2"
-Op(lambda x: x // 2, "÷2")                 # label = "÷2", id = "x // 2"
-Op(square)                                 # label = id = "square"
-Op(lambda x: x + 1, "⊕", id="inc")         # label = "⊕", id = "inc"
+Op(lambda x: x // 2)                          # label = id = "x // 2"
+Op(lambda x: x // 2, label="÷2")              # label = "÷2", id = "x // 2"
+Op(square)                                    # label = id = "square"
+Op(lambda x: x + 1, label="⊕", id="inc")      # label = "⊕", id = "inc"
 ```
 
 **Label (display).** Free-form display string on edges. When omitted,
@@ -183,8 +186,8 @@ abstract.
 ```python
 graph = iterate(
     start=range(1, 30),
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-    default=Op(lambda x: x + 2, "+2"),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    default=Op(lambda x: x + 2, label="+2"),
 )
 ```
 
@@ -198,10 +201,10 @@ graph = iterate(
     start=[1],
     rules=[
         Rule(lambda x: True,
-             Op(lambda x: 2 * x, "×2"),
+             Op(lambda x: 2 * x, label="×2"),
              bound=lambda x: 2 * x <= ceiling),
         Rule(lambda x: True,
-             Op(lambda x: 2 * x + 1, "×2+1"),
+             Op(lambda x: 2 * x + 1, label="×2+1"),
              bound=lambda x: 2 * x + 1 <= ceiling),
     ],
     default=None,
@@ -217,11 +220,11 @@ graph = iterate(
 graph = iterate(
     start=range(1, 30),
     rules=[
-        Rule(lambda x: x % 15 == 0, Op(lambda x: x // 15, "÷15")),
-        Rule(lambda x: x % 3 == 0 and x % 15 != 0, Op(lambda x: x // 3, "÷3")),
-        Rule(lambda x: x % 5 == 0 and x % 15 != 0, Op(lambda x: x // 5, "÷5")),
+        Rule(lambda x: x % 15 == 0, Op(lambda x: x // 15, label="÷15")),
+        Rule(lambda x: x % 3 == 0 and x % 15 != 0, Op(lambda x: x // 3, label="÷3")),
+        Rule(lambda x: x % 5 == 0 and x % 15 != 0, Op(lambda x: x // 5, label="÷5")),
     ],
-    default=Op(lambda x: x + 1, "+1"),
+    default=Op(lambda x: x + 1, label="+1"),
     tags={"highlight": lambda x: x > 0 and (x & (x - 1)) == 0},
 )
 ```
@@ -411,8 +414,8 @@ JSON graphs:
 graph = iterate(
     start=range(1, 30),
     rules=[Rule(lambda x: x % 3 == 0,
-                Op(lambda x: x // 3, "÷3", id="div3"))],
-    default=Op(lambda x: x + 2, "+2", id="inc2"),
+                Op(lambda x: x // 3, label="÷3", id="div3"))],
+    default=Op(lambda x: x + 2, label="+2", id="inc2"),
 )
 
 dot = to_dot(graph, op_colors={
@@ -481,14 +484,14 @@ Examples:
 
 ```bash
 visiter build 'range(1, 30),
-    [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-    default=Op(lambda x: x+2, "+2")'
+    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+    default=Op(lambda x: x+2, label="+2")'
 ```
 
 ```bash
 visiter build 'start=[1], rules=[
-    Rule(lambda x: True, Op(lambda x: 2*x, "×2"), bound=lambda x: 2*x <= 64),
-    Rule(lambda x: True, Op(lambda x: 2*x+1, "×2+1"), bound=lambda x: 2*x+1 <= 64),
+    Rule(lambda x: True, Op(lambda x: 2*x, label="×2"), bound=lambda x: 2*x <= 64),
+    Rule(lambda x: True, Op(lambda x: 2*x+1, label="×2+1"), bound=lambda x: 2*x+1 <= 64),
 ], default=None, max_depth=8'
 ```
 
@@ -535,8 +538,8 @@ import graphviz
 
 graph = iterate(
     start=[1],
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-    default=Op(lambda x: x + 2, "+2"),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    default=Op(lambda x: x + 2, label="+2"),
     max_depth=6,
 )
 max_d = max(info["depth"] for info in graph["nodes"].values()) or 1
@@ -603,7 +606,7 @@ eval namespace, the whole pipeline runs as one shell command:
 ```bash
 visiter build '
     start=[Fraction(1)],
-    rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+    rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, label="1 + 1/x"))],
     default=None,
     max_depth=7,
     key_type="number",
@@ -647,7 +650,7 @@ a third-party quantity class, your own domain object — is one
 ```bash
 visiter build --import sympy:Rational '
     start=[Rational(1, 2)],
-    rules=[Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+    rules=[Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x, label="1 + 1/x"))],
     default=None,
     key_type="number",
 '
@@ -795,8 +798,8 @@ import networkx as nx
 
 graph = iterate(
     start=range(1, 30),
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-    default=Op(lambda x: x + 2, "+2"),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    default=Op(lambda x: x + 2, label="+2"),
 )
 
 g = to_networkx(graph)

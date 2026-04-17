@@ -5,12 +5,12 @@ from visiter import Op, Rule, iterate
 
 def descent_rules():
     # Rule: divisible-by-3 → divide by 3.
-    return [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))]
+    return [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))]
 
 
 def descent_default():
     # Default: add 2 when no rule matches.
-    return Op(lambda x: x + 2, "+2")
+    return Op(lambda x: x + 2, label="+2")
 
 
 def test_basic_descent_forms_cycle():
@@ -47,7 +47,7 @@ def test_max_depth_caps_expansion_and_emits_pseudo_edges():
 
 def test_rule_bound_emits_pseudo_edges_not_real_ones():
     # Doubling rule, bounded at 8.
-    rules = [Rule(lambda x: True, Op(lambda x: 2 * x, "×2"),
+    rules = [Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
                   bound=lambda x: 2 * x <= 8)]
     g = iterate([1], rules=rules, default=None)
     # Real edges: 1→2, 2→4, 4→8. Pseudo: 8 (would go to 16 but blocked).
@@ -56,21 +56,21 @@ def test_rule_bound_emits_pseudo_edges_not_real_ones():
 
 
 def test_default_fires_only_when_no_rule_matches():
-    rules = [Rule(lambda x: x > 100, Op(lambda x: x // 2, "halve"))]
-    g = iterate([5], rules=rules, default=Op(lambda x: x + 1, "+1"),
+    rules = [Rule(lambda x: x > 100, Op(lambda x: x // 2, label="halve"))]
+    g = iterate([5], rules=rules, default=Op(lambda x: x + 1, label="+1"),
                 max_nodes=20, on_limit="stop")
     # 5 < 100, so default fires; +1 goes 5→6→7→… until max_nodes.
     assert all(e["op"] == "x + 1" for e in g["edges"])
 
 
 def test_max_nodes_raises_by_default():
-    rules = [Rule(lambda x: True, Op(lambda x: x + 1, "+1"))]
+    rules = [Rule(lambda x: True, Op(lambda x: x + 1, label="+1"))]
     with pytest.raises(RuntimeError, match="max_nodes"):
         iterate([0], rules=rules, default=None, max_nodes=10)
 
 
 def test_max_nodes_stop_returns_partial():
-    rules = [Rule(lambda x: True, Op(lambda x: x + 1, "+1"))]
+    rules = [Rule(lambda x: True, Op(lambda x: x + 1, label="+1"))]
     g = iterate([0], rules=rules, default=None, max_nodes=10, on_limit="stop")
     assert len(g["nodes"]) == 10
 
@@ -94,9 +94,9 @@ def test_tags_recorded_when_predicate_matches():
 def test_multiple_rules_fan_out():
     # Rules can both match for the same x → multiple outgoing edges.
     rules = [
-        Rule(lambda x: x < 100, Op(lambda x: 2 * x, "×2"),
+        Rule(lambda x: x < 100, Op(lambda x: 2 * x, label="×2"),
              bound=lambda x: 2 * x < 100),
-        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3")),
+        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3")),
     ]
     g = iterate([6], rules=rules, default=None)
     # 6 matches both rules → edges 6→12 and 6→2.
@@ -117,7 +117,7 @@ def test_op_label_defaults_to_lambda_body():
 
 
 def test_op_label_explicit_still_wins():
-    op = Op(lambda x: x * 2, "double")
+    op = Op(lambda x: x * 2, label="double")
     assert op.label == "double"
     op_kw = Op(lambda x: x * 2, label="double")
     assert op_kw.label == "double"
@@ -158,7 +158,7 @@ def test_op_id_is_stable_against_custom_labels():
     # op_colors pinning remains valid across display tweaks.
     shared_func = lambda x: x // 3  # noqa: E731
     a = Op(shared_func)
-    b = Op(shared_func, "÷3")
+    b = Op(shared_func, label="÷3")
     assert a.id == b.id
     assert a.label != b.label
 

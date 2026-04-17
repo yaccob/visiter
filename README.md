@@ -38,8 +38,8 @@ from visiter import iterate, Op, Rule, to_dot
 
 graph = iterate(
     start=range(1, 30),
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-    default=Op(lambda x: x + 2, "+2"),
+    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    default=Op(lambda x: x + 2, label="+2"),
 )
 dot = to_dot(graph, anchor=1, radius=8, direction="backward")
 dot.render("descent", format="svg")
@@ -60,10 +60,10 @@ graph = iterate(
     start=[1],
     rules=[
         Rule(lambda x: True,
-             Op(lambda x: 2 * x, "×2"),
+             Op(lambda x: 2 * x, label="×2"),
              bound=lambda x: 2 * x <= ceiling),
         Rule(lambda x: True,
-             Op(lambda x: 2 * x + 1, "×2+1"),
+             Op(lambda x: 2 * x + 1, label="×2+1"),
              bound=lambda x: 2 * x + 1 <= ceiling),
     ],
     default=None,
@@ -82,8 +82,8 @@ they pipe directly:
 
 ```bash
 visiter build 'range(1, 30),
-                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, "÷3"))],
-                 default=Op(lambda x: x+2, "+2")' \
+                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
+                 default=Op(lambda x: x+2, label="+2")' \
   | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
   | dot -Tsvg > descent.svg
 ```

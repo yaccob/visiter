@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 
 EXPR='start=["banana", "garage", "queue", "iterator"],
 rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
-            Op(lambda s: s[:-1], "drop-vowel"))],
+            Op(lambda s: s[:-1], label="drop-vowel"))],
 default=None'
 
 visiter build "$EXPR" \

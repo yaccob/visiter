@@ -20,9 +20,9 @@ mkdir -p "$OUT"
 
 # Reverse binary tree: from 1, doubling and double-plus-one until 64.
 EXPR='start=[1], rules=[
-    Rule(lambda x: True, Op(lambda x: 2*x, "×2"),
+    Rule(lambda x: True, Op(lambda x: 2*x, label="×2"),
          bound=lambda x: 2*x <= 64),
-    Rule(lambda x: True, Op(lambda x: 2*x+1, "×2+1"),
+    Rule(lambda x: True, Op(lambda x: 2*x+1, label="×2+1"),
          bound=lambda x: 2*x+1 <= 64),
 ], default=None'
 

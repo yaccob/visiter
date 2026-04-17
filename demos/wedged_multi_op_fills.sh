@@ -17,11 +17,11 @@ mkdir -p "$OUT"
 EXPR='
 start=range(1, 50),
 rules=[
-    Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, "÷2")),
-    Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3")),
-    Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5, "÷5")),
+    Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, label="÷2")),
+    Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3")),
+    Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5, label="÷5")),
 ],
-default=Op(lambda x: x + 1, "+1"),
+default=Op(lambda x: x + 1, label="+1"),
 max_depth=4'
 
 visiter build "$EXPR" \

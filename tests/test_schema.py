@@ -20,7 +20,7 @@ def test_bundled_schema_is_valid_draft_2020_12():
 
 
 def test_iterate_output_declares_schema_version():
-    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"), max_nodes=5,
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, label="+1"), max_nodes=5,
                 on_limit="stop")
     assert g["schema_version"] == "1"
 
@@ -28,8 +28,8 @@ def test_iterate_output_declares_schema_version():
 def test_iterate_output_validates_against_schema():
     g = iterate(
         start=range(1, 30),
-        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-        default=Op(lambda x: x + 2, "+2"),
+        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+        default=Op(lambda x: x + 2, label="+2"),
         max_depth=8,
         tags={"highlight": lambda x: x > 0 and (x & (x - 1)) == 0},
     )
@@ -37,7 +37,7 @@ def test_iterate_output_validates_against_schema():
 
 
 def test_schema_rejects_wrong_version():
-    g = iterate([1], rules=[], default=Op(lambda x: x, "id"), max_nodes=2,
+    g = iterate([1], rules=[], default=Op(lambda x: x, label="id"), max_nodes=2,
                 on_limit="stop")
     g["schema_version"] = "2"
     errs = list(Draft202012Validator(_schema()).iter_errors(g))
@@ -47,8 +47,8 @@ def test_schema_rejects_wrong_version():
 def test_iterate_emits_key_type_integer_for_integer_seeds():
     g = iterate(
         start=range(1, 5),
-        rules=[Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, "÷2"))],
-        default=Op(lambda x: x + 1, "+1"),
+        rules=[Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, label="÷2"))],
+        default=Op(lambda x: x + 1, label="+1"),
     )
     for key, info in g["nodes"].items():
         assert info["key_type"] == "integer", f"node {key}: {info}"
@@ -59,7 +59,7 @@ def test_iterate_emits_key_type_string_for_string_seeds():
     g = iterate(
         start=["banana", "garage"],
         rules=[Rule(lambda s: len(s) > 0 and s[-1] in vowels,
-                    Op(lambda s: s[:-1], "drop-vowel"))],
+                    Op(lambda s: s[:-1], label="drop-vowel"))],
         default=None,
     )
     for key, info in g["nodes"].items():
@@ -71,7 +71,7 @@ def test_iterate_emits_key_type_array_for_tuple_seeds():
     g = iterate(
         start=[(0, 0)],
         rules=[Rule(lambda p: p[0] < 2,
-                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    Op(lambda p: (p[0] + 1, p[1]), label="right"),
                     bound=lambda p: p[0] + 1 <= 2)],
         default=None,
     )
@@ -87,7 +87,7 @@ def test_iterate_emits_key_type_boolean_not_integer():
 
 
 def test_schema_restricts_key_type_to_json_primitives():
-    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, label="+1"),
                 max_nodes=3, on_limit="stop")
     # A Python-specific name like "int" must NOT validate.
     for info in g["nodes"].values():
@@ -98,7 +98,7 @@ def test_schema_restricts_key_type_to_json_primitives():
 
 def test_schema_requires_key_type_on_every_node():
     # An otherwise-valid doc without key_type must fail validation.
-    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, label="+1"),
                 max_nodes=3, on_limit="stop")
     # Strip key_type to simulate a doc missing the field.
     for info in g["nodes"].values():
@@ -108,7 +108,7 @@ def test_schema_requires_key_type_on_every_node():
 
 
 def test_schema_requires_schema_version_at_top_level():
-    g = iterate([1], rules=[], default=Op(lambda x: x + 1, "+1"),
+    g = iterate([1], rules=[], default=Op(lambda x: x + 1, label="+1"),
                 max_nodes=3, on_limit="stop")
     del g["schema_version"]
     errors = list(Draft202012Validator(_schema()).iter_errors(g))
@@ -121,7 +121,7 @@ def test_string_valued_iterate_validates_against_schema():
     g = iterate(
         start=["banana", "garage"],
         rules=[Rule(lambda s: len(s) > 0 and s[-1] in vowels,
-                    Op(lambda s: s[:-1], "drop-vowel"))],
+                    Op(lambda s: s[:-1], label="drop-vowel"))],
         default=None,
     )
     Draft202012Validator(_schema()).validate(g)
@@ -134,7 +134,7 @@ def test_tuple_valued_iterate_validates_against_schema_after_json_roundtrip():
     g = iterate(
         start=[(0, 0)],
         rules=[Rule(lambda p: p[0] < 2,
-                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    Op(lambda p: (p[0] + 1, p[1]), label="right"),
                     bound=lambda p: p[0] + 1 <= 2)],
         default=None,
     )
@@ -143,7 +143,7 @@ def test_tuple_valued_iterate_validates_against_schema_after_json_roundtrip():
 
 
 def test_schema_rejects_unknown_top_level_property():
-    g = iterate([1], rules=[], default=Op(lambda x: x, "id"), max_nodes=2,
+    g = iterate([1], rules=[], default=Op(lambda x: x, label="id"), max_nodes=2,
                 on_limit="stop")
     g["surprise"] = True
     errs = list(Draft202012Validator(_schema()).iter_errors(g))

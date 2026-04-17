@@ -5,8 +5,8 @@ from visiter.render_helpers import resolve_op_colors
 def make_descent_graph():
     return iterate(
         range(1, 28),
-        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-        default=Op(lambda x: x + 2, "+2"),
+        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+        default=Op(lambda x: x + 2, label="+2"),
     )
 
 
@@ -63,7 +63,7 @@ def test_anchor_radius_crops_graph():
 def test_pseudo_edges_become_ghost_stubs():
     # Bound-stopped graph: 1→2→4→8→(pseudo)16.
     g = iterate([1],
-                rules=[Rule(lambda x: True, Op(lambda x: 2 * x, "×2"),
+                rules=[Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
                             bound=lambda x: 2 * x <= 8)],
                 default=None)
     src = to_dot(g).source
@@ -79,8 +79,8 @@ def test_outgoing_cut_emits_ghost_and_contributes_fill():
 
 def test_show_factors_adds_factorization_to_label():
     g = iterate([6],
-                rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, "÷3"))],
-                default=Op(lambda x: x + 2, "+2"))
+                rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+                default=Op(lambda x: x + 2, label="+2"))
     src = to_dot(g, show_factors=True).source
     # 6 = 2·3 should appear in some form.
     assert "2·3" in src or "2&middot;3" in src
@@ -108,7 +108,7 @@ def make_string_graph():
     return iterate(
         start=["banana", "garage"],
         rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
-                    Op(lambda s: s[:-1], "drop-vowel"))],
+                    Op(lambda s: s[:-1], label="drop-vowel"))],
         default=None,
     )
 
@@ -133,7 +133,7 @@ def test_to_dot_renders_tuple_valued_graph_after_json_roundtrip():
     g = iterate(
         start=[(0, 0)],
         rules=[Rule(lambda p: p[0] < 2,
-                    Op(lambda p: (p[0] + 1, p[1]), "right"),
+                    Op(lambda p: (p[0] + 1, p[1]), label="right"),
                     bound=lambda p: p[0] + 1 <= 2)],
         default=None,
     )

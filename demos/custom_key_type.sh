@@ -23,7 +23,7 @@ mkdir -p "$OUT"
 
 EXPR='
 start=[Fraction(1)],
-rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, "1 + 1/x"))],
+rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, label="1 + 1/x"))],
 default=None,
 max_depth=7,
 key_type="number"'

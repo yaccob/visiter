@@ -26,9 +26,9 @@ mkdir -p "$OUT"
 visiter build '
 start=[1, 5],
 rules=[
-    Rule(lambda x: True, Op(lambda x: 2*x, "×2"),
+    Rule(lambda x: True, Op(lambda x: 2*x, label="×2"),
          bound=lambda x: 2*x <= 16),
-    Rule(lambda x: True, Op(lambda x: 3*x, "×3"),
+    Rule(lambda x: True, Op(lambda x: 3*x, label="×3"),
          bound=lambda x: 3*x <= 18),
 ],
 default=None' \
@@ -42,8 +42,8 @@ echo "wrote $OUT/pseudo_via_bound.svg (ghost stubs from Rule.bound)"
 visiter build '
 start=[1, 5],
 rules=[
-    Rule(lambda x: True, Op(lambda x: 2*x, "×2")),
-    Rule(lambda x: True, Op(lambda x: 3*x, "×3")),
+    Rule(lambda x: True, Op(lambda x: 2*x, label="×2")),
+    Rule(lambda x: True, Op(lambda x: 3*x, label="×3")),
 ],
 default=None,
 max_depth=2' \
