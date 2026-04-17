@@ -80,3 +80,21 @@ def test_demo_runs(script, tmp_path):
             f"does not resolve from the caller's cwd "
             f"({tmp_path}); got: {candidate}"
         )
+
+
+@pytest.mark.parametrize("vit", sorted(DEMOS.glob("*.vit")),
+                         ids=lambda p: p.name)
+def test_vit_demo_renders(vit, tmp_path):
+    """Standalone .vit demos render successfully via viter."""
+    out_svg = tmp_path / vit.with_suffix(".svg").name
+    result = subprocess.run(
+        ["viter", str(vit), "-o", str(out_svg)],
+        env={**os.environ, "PATH": AUGMENTED_PATH},
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, (
+        f"vit demo failed: {vit.name}\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert out_svg.exists(), f"{vit.name}: expected {out_svg} to exist"
+    assert out_svg.stat().st_size > 0, f"{vit.name}: output SVG is empty"

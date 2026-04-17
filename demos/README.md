@@ -8,7 +8,7 @@ there's no implied progression, run them in any order.
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `anchor_radius_crop_and_recolor.sh`             | Anchor/radius cropping at render time + the `op_colors` palette override                             |
 | `pipeline_to_svg_and_pdf.sh`                    | Full pipeline `build → to-dot → dot -Tsvg/-Tpdf`; also showcases wedged fills and bound stubs      |
-| `non_integer_values.sh`                         | Arbitrary hashable values as nodes (strings, in this case)                                            |
+| `non_integer_values.vit`                        | Arbitrary hashable values as nodes (strings, in this case)                                            |
 | `pseudo_edges_bound_and_max_depth.sh`           | Pseudo-edges from the two distinct sources — `Rule.bound` and `max_depth` — both rendered identically |
 | `wedged_multi_op_fills.sh`                      | Wedged-pie fills for nodes with multiple distinct outgoing op labels                                  |
 | `op_label_stable_coloring.sh`                   | Stable colors per op label across runs; the `op_colors` pin for resilience under rule edits           |
@@ -17,8 +17,8 @@ there's no implied progression, run them in any order.
 | `analytics_condensation_rendered.sh`            | NetworkX bridge: graph-valued result (condensation) piped back into `to-dot`                          |
 | `analytics_shortest_paths_highlighted.sh`       | NetworkX bridge: shortest paths, then tag-driven node highlighting on render                          |
 | `custom_key_type.sh`                            | Iteration on `fractions.Fraction` values, classified as `"number"` via `build(..., key_type=...)`  |
-| `nim_matchstick_game.sh`                        | Matchstick game (Nim): all game states from a `.vit` file, winning positions highlighted             |
-| `atm_banknote_combinations.sh`                  | ATM payout: all ways to dispense 80 EUR with 50/20/10 notes, from a `.vit` file                     |
+| `nim_matchstick_game.vit`                       | Matchstick game (Nim): all game states, winning positions highlighted                                |
+| `atm_banknote_combinations.vit`                 | ATM payout: all ways to dispense 80 EUR with 50/20/10 notes                                         |
 | `tictactoe.sh`                                  | Tic-Tac-Toe game tree with symmetry reduction (canonical boards); arg: depth (default 9)            |
 | `water_jugs.sh`                                 | Water jug problem (Die Hard 3): non-trivial cycles from fill/empty/pour; args: cap_a cap_b target   |
 
