@@ -65,8 +65,10 @@ _SUP_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 
 # Fallback palette. Each slot is (fill_color, edge_color): a light pastel for
 # node fills (readable labels) and a more saturated variant for edges (thin
-# lines that need visibility). Legacy iterate blue/orange sit in the first two
-# slots so binary graphs keep their familiar look.
+# lines that need visibility). The first six slots are the legacy palette
+# (blue, orange, green, purple, olive, teal) so existing graphs keep their
+# familiar look. Slots 7–12 fill the hue gaps for use cases with many ops
+# (e.g. Tic-Tac-Toe's 9 move positions).
 DEFAULT_OP_PALETTE = [
     ("#ccddff", "#6688bb"),  # blue
     ("#ffddcc", "#ddbb99"),  # orange
@@ -74,6 +76,12 @@ DEFAULT_OP_PALETTE = [
     ("#eeccee", "#aa77aa"),  # purple
     ("#eeeeaa", "#aaaa66"),  # olive
     ("#cceeee", "#77aaaa"),  # teal
+    ("#edcfcf", "#b96e6e"),  # red
+    ("#ece1c6", "#bfa669"),  # gold
+    ("#d9e8c9", "#94b474"),  # lime
+    ("#d1e4eb", "#74a4b4"),  # cyan
+    ("#cfc9e8", "#7e74b4"),  # indigo
+    ("#ebd1de", "#b47494"),  # pink
 ]
 _PALETTE_FALLBACK = "#888888"
 
