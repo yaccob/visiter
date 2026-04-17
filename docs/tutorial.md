@@ -1,5 +1,24 @@
 # VisIter — a gentle introduction
 
+> **TL;DR** — build a graph, render it:
+>
+> ```python
+> from visiter import build, Op, Rule, to_dot
+>
+> graph = build(
+>     start=[1],
+>     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+>     default=Op(lambda x: x + 2),
+> )
+> to_dot(graph).render("first", format="svg")
+> ```
+>
+> Or from the shell: `echo '[1], [Rule(…)], Op(…)' | visiter build | visiter to-dot | dot -Tsvg > out.svg`
+>
+> Read on for the concepts behind these two lines.
+
+---
+
 This tutorial walks you from "what is this for?" to "I can build my
 own visualizations" in a handful of small steps. Each section is one
 question. Skim the questions first; jump in where it feels useful.
@@ -25,7 +44,7 @@ attractors at a glance.
 
 VisIter does exactly that, in two stages:
 
-1. **`iterate`** runs your rules from one or more starting values and
+1. **`build`** runs your rules from one or more starting values and
    returns a graph data structure (just a dict).
 2. **`to_dot`** turns that graph into a Graphviz drawing.
 
@@ -41,9 +60,9 @@ Start from 1. Whenever the value is divisible by 3, divide it by 3.
 Otherwise, add 2.
 
 ```python
-from visiter import iterate, Op, Rule, to_dot
+from visiter import build, Op, Rule, to_dot
 
-graph = iterate(
+graph = build(
     start=[1],
     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
     default=Op(lambda x: x + 2),
@@ -96,7 +115,7 @@ details.
 
 ## What happens when no rule applies?
 
-You answer that explicitly when you call `iterate`, with the `default`
+You answer that explicitly when you call `build`, with the `default`
 keyword:
 
 - `default=Op(...)` — apply this operation when nothing else fires.
@@ -212,7 +231,7 @@ The renderer uses a small visual vocabulary so the picture itself
 carries semantic information:
 
 - **Bold border** (`penwidth="3"`) — this node is a *root*: one of the
-  seed values you passed to `iterate`.
+  seed values you passed to `build`.
 - **No fill (white)** — leaf: zero outgoing edges. The iteration
   terminates here naturally.
 - **Solid fill** — node has exactly one outgoing op label; the fill
@@ -220,7 +239,7 @@ carries semantic information:
 - **Wedged-pie fill** — node has two or more distinct outgoing op
   labels; the slices are colored after each op (one slice per op).
 - **Darkened fill + white font** — the node carries the `"highlight"`
-  tag (set by a predicate you passed to `iterate`'s `tags` argument).
+  tag (set by a predicate you passed to `build`'s `tags` argument).
 
 So at a glance: bold border = where you started; white = where you
 stopped naturally; multi-color pie = where the iteration branches;
@@ -329,7 +348,7 @@ The graph-dict shape is formally specified as a JSON Schema (Draft
 
 That gives you three things:
 
-- A machine-readable contract for tools that consume `iterate` output.
+- A machine-readable contract for tools that consume `build` output.
 - A pipeline checkpoint: `visiter validate` reads JSON on stdin and
   exits non-zero if the shape drifted.
 - A versioning anchor: future breaking changes ship under `/v2/`,

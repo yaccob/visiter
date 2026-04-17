@@ -1,6 +1,6 @@
 """Bridge between VisIter graph dicts and NetworkX DiGraphs.
 
-VisIter handles the *building* of iteration graphs (via `iterate`) and
+VisIter handles the *building* of iteration graphs (via `build`) and
 the *rendering* (via `to_dot`). For everything in between — graph
 analysis, algorithms, metrics — NetworkX is the mature answer. This
 module provides a two-way translation so you can pipe a VisIter graph

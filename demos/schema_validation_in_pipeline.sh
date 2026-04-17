@@ -3,7 +3,7 @@
 # graph JSON to `visiter validate` (which writes its verdict to stderr
 # / a side file) while the main pipe continues into `to-dot`. If the
 # graph ever drifted from the documented shape — say, after a future
-# breaking change to iterate — this would catch it before rendering.
+# breaking change to build — this would catch it before rendering.
 set -euo pipefail
 HERE="$(dirname "$0")"
 OUT="$HERE/out"

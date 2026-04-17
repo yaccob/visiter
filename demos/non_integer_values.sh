@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Iteration on strings, not numbers. Rule: if the word ends in a vowel,
 # drop the last character. Default: none — words ending in a consonant
-# are leaves. Demonstrates that `iterate`'s value type can be any
+# are leaves. Demonstrates that `build`'s value type can be any
 # hashable, str()-able Python object.
 set -euo pipefail
 HERE="$(dirname "$0")"

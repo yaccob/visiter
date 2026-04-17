@@ -2,7 +2,7 @@
 
 Public API:
 
-    iterate(start, rules, default, *, max_depth=None, max_nodes=..., ...)
+    build(start, rules, default, *, max_depth=None, max_nodes=..., ...)
         Build a graph by applying guard-and-operation Rules from each start
         via BFS, tracking per-node depth and optional pseudo-edges for
         structural bounds.
@@ -17,11 +17,11 @@ Public API:
         bound distinguishes "stop here" from "not applicable".
 
     to_dot(graph, *, anchor=..., radius=..., op_colors=..., ...)
-        Turn an iterate-result into a Graphviz Digraph, with cropping,
+        Turn a build-result into a Graphviz Digraph, with cropping,
         coloring, ghost stubs, and node annotations.
 """
 
-from .iteration import Op, Rule, iterate, parse_range
+from .iteration import Op, Rule, build, parse_range
 from .to_dot import to_dot
 from .render_helpers import (
     DEFAULT_OP_PALETTE,
@@ -41,7 +41,7 @@ __version__ = "0.9.0"
 __all__ = [
     "Op",
     "Rule",
-    "iterate",
+    "build",
     "parse_range",
     "to_dot",
     "DEFAULT_OP_PALETTE",

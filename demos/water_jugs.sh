@@ -10,7 +10,7 @@
 #
 # Produces two SVGs:
 #   water_jugs.svg       — full reachability graph (target states
-#                          highlighted via iterate's tags=)
+#                          highlighted via build's tags=)
 #   water_jugs_path.svg  — only the shortest path(s) to a target
 #                          (found via visiter analyze + NetworkX)
 #

@@ -1,9 +1,9 @@
-from visiter import Op, Rule, iterate, to_dot
+from visiter import Op, Rule, build, to_dot
 from visiter.render_helpers import resolve_op_colors
 
 
 def make_descent_graph():
-    return iterate(
+    return build(
         range(1, 28),
         rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
         default=Op(lambda x: x + 2, label="+2"),
@@ -40,7 +40,7 @@ def test_op_colors_override_palette():
 def test_to_dot_uses_op_labels_for_display_when_id_differs():
     # Explicit id decoupled from display label: the rendered edge
     # label must be the display label, not the id.
-    g = iterate([6], rules=[
+    g = build([6], rules=[
         Rule(lambda x: x % 2 == 0,
              Op(lambda x: x // 2, label="half", id="hv"))],
         default=None)
@@ -62,7 +62,7 @@ def test_anchor_radius_crops_graph():
 
 def test_pseudo_edges_become_ghost_stubs():
     # Bound-stopped graph: 1→2→4→8→(pseudo)16.
-    g = iterate([1],
+    g = build([1],
                 rules=[Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
                             bound=lambda x: 2 * x <= 8)],
                 default=None)
@@ -78,7 +78,7 @@ def test_outgoing_cut_emits_ghost_and_contributes_fill():
 
 
 def test_show_factors_adds_factorization_to_label():
-    g = iterate([6],
+    g = build([6],
                 rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
                 default=Op(lambda x: x + 2, label="+2"))
     src = to_dot(g, show_factors=True).source
@@ -105,7 +105,7 @@ def test_to_dot_time_limit_raises():
 
 def make_string_graph():
     # Drop trailing vowel until none remain. Pure string-valued iteration.
-    return iterate(
+    return build(
         start=["banana", "garage"],
         rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
                     Op(lambda s: s[:-1], label="drop-vowel"))],
@@ -130,7 +130,7 @@ def test_to_dot_marks_string_valued_roots_with_bold_border():
 
 def test_to_dot_renders_tuple_valued_graph_after_json_roundtrip():
     import json
-    g = iterate(
+    g = build(
         start=[(0, 0)],
         rules=[Rule(lambda p: p[0] < 2,
                     Op(lambda p: (p[0] + 1, p[1]), label="right"),

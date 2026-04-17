@@ -16,7 +16,7 @@ or `max_depth` suppressed expansion. A second stage (`to_dot`) turns
 the resulting graph dict into a Graphviz drawing with cropping,
 coloring, wedged-pie fills for branching nodes, and dashed "ghost
 stubs" at every cut boundary. The graph dict has a published JSON
-Schema, and a CLI (`iterate | to-dot | dot`) makes the stages
+Schema, and a CLI (`build | to-dot | dot`) makes the stages
 pipe-composable.
 
 In one phrase: **orbit graphs for discrete iterations under guarded
@@ -157,7 +157,7 @@ discrete reachability graphs.
 ¹ NetworkX can do this, but the wiring is yours to write.
 ² For Petri-net-shaped rules only.
 ³ Strictly: invocable from a script, but not designed around Unix
-  pipe composition like VisIter's `iterate | to-dot | dot`.
+  pipe composition like VisIter's `build | to-dot | dot`.
 ⁴ Any term in the user's signature, not any hashable Python object.
 ⁵ Via `NeighborhoodGraph` / `Subgraph`; separate primitive.
 ⁶ Via the `[analytics]` extra, which bridges to NetworkX: install with

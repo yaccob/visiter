@@ -22,7 +22,7 @@ Coordinate labels follow the a–c (column) / 1–3 (row) convention:
 
 Symmetry reduction: every board is normalised to its canonical form
 (the lexicographically smallest among all 8 rigid symmetries of the
-square — 4 rotations × 2 reflections). That way `iterate` merges
+square — 4 rotations × 2 reflections). That way `build` merges
 rotationally equivalent positions into a single node.
 """
 

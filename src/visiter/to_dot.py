@@ -52,7 +52,7 @@ def to_dot(graph, *, op_labels=None,
                  show_binary=False, show_ternary=False, show_factors=False,
                  node_label=None, node_label_attr=None,
                  time_limit=None, on_limit="raise"):
-    """Render a graph dict (from `iterate`) as a Graphviz Digraph.
+    """Render a graph dict (from `build`) as a Graphviz Digraph.
 
     Args:
         graph: dict with "roots", "nodes", "edges".
@@ -108,7 +108,7 @@ def to_dot(graph, *, op_labels=None,
 
     # Effective display label per op identity. Priority: user override
     # (via to_dot's op_labels= kwarg) > graph["op_labels"] (set by
-    # iterate from each Op's label) > format_op_label(identity) as a
+    # build from each Op's label) > format_op_label(identity) as a
     # last-resort cosmetic transform for legacy string-style ops.
     user_labels = op_labels or {}
     graph_labels = graph.get("op_labels", {})
@@ -165,7 +165,7 @@ def to_dot(graph, *, op_labels=None,
             "op_labels": graph.get("op_labels", {}),
         }
 
-    # Pseudo-edges (from iterate's bound=False outcomes) become outgoing
+    # Pseudo-edges (from build's bound=False outcomes) become outgoing
     # ghost stubs, sharing the cut_edges_out machinery.
     for pe in graph.get("pseudo_edges", []):
         cut_edges.append((str(pe["from"]), pe["op"], True))

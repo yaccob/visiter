@@ -4,12 +4,12 @@ Built on rich-click. Each subcommand keeps the project's deliberate
 "single positional Python expression that is eval'd into the wrapped
 function call" contract — this avoids per-flag DSL drift as the
 underlying Python API grows. The expression is spliced into a call
-that has `Op`, `Rule`, `iterate`, `to_dot`, and (for `to-dot`/`validate`)
+that has `Op`, `Rule`, `build`, `to_dot`, and (for `to-dot`/`validate`)
 `graph` pre-bound in its eval namespace.
 
 The eval namespace also comes with `Fraction` and `Decimal` bound by
 default — the common stdlib numeric types that motivate
-`iterate(..., key_type=...)`. Anything beyond those is opt-in via the
+`build(..., key_type=...)`. Anything beyond those is opt-in via the
 repeatable `--import` option: `--import MODULE` binds the module
 under its own name, `--import MODULE:NAME[,NAME...]` binds specific
 attributes. See each subcommand's `--help`.
@@ -26,13 +26,13 @@ from fractions import Fraction
 import rich_click as click
 
 from . import __version__
-from .iteration import Op, Rule, iterate
+from .iteration import Op, Rule, build
 from .to_dot import to_dot
 
 _eval_counter = itertools.count()
 
 # Stdlib numeric types bound by default in the eval namespace. These
-# are the types that motivated `iterate(..., key_type=...)` (rational
+# are the types that motivated `build(..., key_type=...)` (rational
 # and arbitrary-precision decimal arithmetic), so having them
 # available without an explicit --import covers the common case.
 _DEFAULT_EVAL_BINDINGS = {"Fraction": Fraction, "Decimal": Decimal}
@@ -90,7 +90,7 @@ def _resolve_imports(specs):
 
 
 def _read_argstring(file):
-    """Read an iterate argstring from a file-like object.
+    """Read a build argstring from a file-like object.
 
     Strips full-line ``#`` comments (shebang, annotations) so ``.vit``
     files are directly usable. Trailing ``#`` comments on code lines
@@ -217,16 +217,16 @@ def build_cmd(file, imports):
     """Build an orbit graph and write JSON to stdout.
 
     FILE is a `.vit` file containing the Python expression that will be
-    spliced into `iterate(…)` and eval'd. Use `-` or omit to read from
+    spliced into `build(…)` and eval'd. Use `-` or omit to read from
     stdin. `#`-comment lines are stripped (shebang, annotations).
 
-    `Op`, `Rule`, `iterate`, `Fraction` and `Decimal` are pre-bound in
+    `Op`, `Rule`, `build`, `Fraction` and `Decimal` are pre-bound in
     the eval namespace; add more via `--import`.
     """
     argstring = _read_argstring(file)
-    ns = {"Rule": Rule, "Op": Op, "iterate": iterate,
+    ns = {"Rule": Rule, "Op": Op, "build": build,
           **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
-    graph = _eval_with_source(f"iterate({argstring})", ns)
+    graph = _eval_with_source(f"build({argstring})", ns)
     json.dump(graph, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
 
@@ -373,7 +373,7 @@ echo 'range(1, 10), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x
 """
 
 
-# Safe defaults for one-shot rendering — tighter than `iterate`'s own
+# Safe defaults for one-shot rendering — tighter than `build`'s own
 # defaults so typo'd rules don't silently consume minutes or gigabytes.
 _RENDER_DEFAULT_MAX_NODES = 10_000
 _RENDER_DEFAULT_TIME_LIMIT = "00:00:30"
@@ -418,19 +418,19 @@ def render_cmd(file, render_args, fmt, output,
     """
     from pathlib import Path
 
-    # Wrap iterate() so the CLI's safety defaults apply but an
+    # Wrap build() so the CLI's safety defaults apply but an
     # explicit kwarg in the argstring still wins. dict.setdefault
     # honours the caller-provided value when present.
     cap_was_hit = {"flag": False}
 
-    def _iterate_with_caps(*args, **kwargs):
+    def _build_with_caps(*args, **kwargs):
         effective_max = kwargs.get("max_nodes", max_nodes)
         kwargs.setdefault("max_nodes", max_nodes)
         kwargs.setdefault("time_limit", time_limit)
         kwargs.setdefault("on_limit", "stop")
         if max_depth is not None:
             kwargs.setdefault("max_depth", max_depth)
-        g = iterate(*args, **kwargs)
+        g = build(*args, **kwargs)
         if (effective_max is not None
                 and len(g.get("nodes", {})) >= effective_max):
             cap_was_hit["flag"] = True
@@ -443,9 +443,9 @@ def render_cmd(file, render_args, fmt, output,
         return g
 
     argstring = _read_argstring(file)
-    build_ns = {"Rule": Rule, "Op": Op, "iterate": _iterate_with_caps,
+    build_ns = {"Rule": Rule, "Op": Op, "build": _build_with_caps,
                 **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
-    graph = _eval_with_source(f"iterate({argstring})", build_ns)
+    graph = _eval_with_source(f"build({argstring})", build_ns)
 
     # JSON-round-trip so graph keys end up as strings (matches what
     # `visiter build | visiter to-dot` would see), without this

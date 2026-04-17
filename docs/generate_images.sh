@@ -110,7 +110,7 @@ VIT
 visiter to-dot 'anchor=2, radius=2, direction="both"' --input /tmp/visiter_dashed.json | dot -Tsvg > "$OUT/dashed_arrows.svg"
 rm -f /tmp/visiter_dashed.json
 
-# --- manual: iterate examples (§2) ---
+# --- manual: build examples (§2) ---
 
 # iterate_descent — descent example, rendered (forward ref to §3).
 visiter build <<'VIT' | visiter to-dot '' | dot -Tsvg > "$OUT/iterate_descent.svg"
@@ -193,10 +193,10 @@ VIT
 # --- manual: recipe — depth-gradient coloring (§5) ---
 
 python3 - > /tmp/visiter_gradient.dot <<'PY'
-from visiter import iterate, Op, Rule, darken
+from visiter import build, Op, Rule, darken
 import graphviz
 
-graph = iterate(
+graph = build(
     start=[1],
     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
     default=Op(lambda x: x + 2, label="+2"),

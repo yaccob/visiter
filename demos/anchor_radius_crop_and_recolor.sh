@@ -4,7 +4,7 @@
 #   (b) a tight 2-hop crop around 1 (shows the ghost-stub mechanism)
 #   (c) full graph with custom op_colors
 # All three views share the same input data (descent.json), proving
-# that iterate and to_dot are decoupled by the documented graph dict.
+# that build and to_dot are decoupled by the documented graph dict.
 #
 # Paths printed below are relative to the caller's cwd when the script
 # itself was invoked relatively, so the output is copy-pasteable.

@@ -52,9 +52,9 @@ viter descent.vit --render 'anchor=1, radius=8, direction="backward"' -o crop.sv
 Use the Python API instead of the CLI:
 
 ```python
-from visiter import iterate, Op, Rule, to_dot
+from visiter import build, Op, Rule, to_dot
 
-graph = iterate(
+graph = build(
     range(1, 10),
     [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
     Op(lambda x: x + 2),

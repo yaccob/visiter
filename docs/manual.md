@@ -5,7 +5,7 @@
 > read [tutorial.md](tutorial.md) first and come back to the manual
 > when you need parameter-level detail.
 
-VisIter is two functions that compose: `iterate` builds a directed graph
+VisIter is two functions that compose: `build` builds a directed graph
 by applying guarded rules to seed values and following reachable
 successors, and `to_dot` turns such a graph into a Graphviz Digraph
 for visualization. The two are connected only by
@@ -56,7 +56,7 @@ Pass `id=` explicitly when you want:
   string but are semantically distinct.
 
 If `_derive_label(func)` fails (REPL, partial), `id` falls back to
-`label` (the one signal we have). `iterate` emits a `UserWarning`
+`label` (the one signal we have). `build` emits a `UserWarning`
 when two rules declare the same id with different callables and
 different labels.
 
@@ -84,17 +84,17 @@ The renderer treats them differently:
 | True      | True/None  | normal edge fires                           |
 | True      | False      | pseudo-edge recorded (rendered as ghost)    |
 
-A `default: Op | None` argument to `iterate` (see below) covers the
+A `default: Op | None` argument to `build` (see below) covers the
 "nothing else fired" case orthogonally.
 
 ---
 
-## 2. `iterate` — building the graph
+## 2. `build` — building the graph
 
 ### Signature
 
 ```python
-iterate(start, rules, default, *,
+build(start, rules, default, *,
         max_depth=None,
         max_nodes=1_000_000,
         time_limit=None,
@@ -139,7 +139,7 @@ iterate(start, rules, default, *,
 
 ```python
 {
-    "schema_version": "1",             # always set by iterate
+    "schema_version": "1",             # always set by build
     "roots":         [int, ...],       # starts, in input order
     "nodes":         {str(value): {
                           "depth":    int,        # min BFS hops from any start
@@ -176,7 +176,7 @@ Notes:
 
 ### Examples
 
-Each block below shows an `iterate(...)` call and the rendered graph
+Each block below shows an `build(...)` call and the rendered graph
 that comes out of it. The rendering details (colors, wedges, dashed
 stubs) are defined in §3 — here the pictures just show what the
 iteration *produces* so the code doesn't have to be read in the
@@ -185,7 +185,7 @@ abstract.
 **Descent with divisor rule and increment default, range(1, 30):**
 
 ```python
-graph = iterate(
+graph = build(
     start=range(1, 30),
     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
     default=Op(lambda x: x + 2, label="+2"),
@@ -198,7 +198,7 @@ graph = iterate(
 
 ```python
 ceiling = 64
-graph = iterate(
+graph = build(
     start=[1],
     rules=[
         Rule(lambda x: True,
@@ -218,7 +218,7 @@ graph = iterate(
 **Multi-way decision via conjunctive rules:**
 
 ```python
-graph = iterate(
+graph = build(
     start=range(1, 30),
     rules=[
         Rule(lambda x: x % 15 == 0, Op(lambda x: x // 15, label="÷15")),
@@ -252,7 +252,7 @@ Returns a `graphviz.Digraph`. Caller decides what to do with it
 
 ### Inputs
 
-- `graph`: dict with the shape produced by `iterate`. (Strictly: needs
+- `graph`: dict with the shape produced by `build`. (Strictly: needs
   `roots`, `nodes`, `edges`, optional `op_order`, optional
   `pseudo_edges`.)
 - `op_labels`: optional `{op: display_label}` dict. Ops not present
@@ -323,7 +323,7 @@ same way:
 - **Incoming cut**: `outside_src → kept_dst`. Rendered as
   `<ghost> → kept_dst`. Does not affect fill (fill comes from
   outgoing edges only).
-- **Pseudo-edge** (from `iterate`): when `Rule.bound` returned False
+- **Pseudo-edge** (from `build`): when `Rule.bound` returned False
   or `max_depth` was reached. Rendered the same as outgoing cut
   (kept_src → ghost), shares the fill-contribution path.
 
@@ -412,7 +412,7 @@ func refactors, is identical from Python, the CLI, and against
 JSON graphs:
 
 ```python
-graph = iterate(
+graph = build(
     start=range(1, 30),
     rules=[Rule(lambda x: x % 3 == 0,
                 Op(lambda x: x // 3, label="÷3", id="div3"))],
@@ -448,11 +448,11 @@ keep it in mind when reading SVGs:
 
 | element                            | meaning                                                                                          |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Bold border** (`penwidth=3`)     | node is in `graph["roots"]` — a seed value passed to `iterate`                                  |
+| **Bold border** (`penwidth=3`)     | node is in `graph["roots"]` — a seed value passed to `build`                                  |
 | **No fill (white)**                | leaf: zero outgoing edges — iteration terminates here                                            |
 | **Solid fill**                     | exactly one outgoing op label; fill = that op's color                                            |
 | **Wedged-pie fill**                | ≥2 distinct outgoing op labels; one slice per op                                                 |
-| **Darkened fill + white font**     | node carries the `"highlight"` tag (set by a predicate in `iterate(..., tags={...})`)            |
+| **Darkened fill + white font**     | node carries the `"highlight"` tag (set by a predicate in `build(..., tags={...})`)            |
 | **Dashed edge to a tiny target**   | "ghost stub" — the iteration would continue here but was stopped by `Rule.bound`, `max_depth`, or render-time crop |
 
 One graph exhibiting every style in the table above:
@@ -464,18 +464,18 @@ One graph exhibiting every style in the table above:
 ## 4. CLI
 
 A single `visiter` command dispatches to subcommands. Each subcommand
-(`iterate`, `to-dot`) takes a single positional argument: a Python
+(`build`, `to-dot`) takes a single positional argument: a Python
 expression that is spliced into a call to the corresponding function
-and `eval`'d. `Op`, `Rule`, `iterate`, `to_dot`, and `graph` (for the
+and `eval`'d. `Op`, `Rule`, `build`, `to_dot`, and `graph` (for the
 renderer) live in the eval namespace.
 
 The CLI exposes the entire Python API without per-flag glue: anything
-you can write as kwargs to `iterate(...)` or `to_dot(...)` works as
+you can write as kwargs to `build(...)` or `to_dot(...)` works as
 the argument string.
 
 `visiter --help` lists available subcommands.
 
-### iterate
+### build
 
 ```
 visiter build 'ARGSTRING'      → JSON graph on stdout
@@ -538,7 +538,7 @@ gigabytes:
 
 | Flag            | Default       | Purpose                                    |
 | --------------- | ------------- | ------------------------------------------ |
-| `--max-nodes`   | `10000`       | BFS node cap (vs. `iterate`'s 1M default)  |
+| `--max-nodes`   | `10000`       | BFS node cap (vs. `build`'s 1M default)  |
 | `--time-limit`  | `00:00:30`    | Wall-clock limit on the build phase        |
 | `--max-depth`   | *(unset)*     | Optional BFS depth cap                     |
 
@@ -597,10 +597,10 @@ renderer. Easy to build on top by constructing the graphviz.Digraph
 yourself and picking each node's fill via `darken` on a base color:
 
 ```python
-from visiter import iterate, Op, Rule, darken
+from visiter import build, Op, Rule, darken
 import graphviz
 
-graph = iterate(
+graph = build(
     start=[1],
     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
     default=Op(lambda x: x + 2, label="+2"),
@@ -626,12 +626,12 @@ for e in graph["edges"]:
 
 ### "I want to limit by absolute value"
 
-Use `value_range=(low, high)` in `to_dot`. To stop iterate from
+Use `value_range=(low, high)` in `to_dot`. To stop build from
 producing huge values in the first place, use `Rule.bound`.
 
 ### "Several disconnected starts, render each cluster separately"
 
-Run `iterate` once per start, render separately. There's no built-in
+Run `build` once per start, render separately. There's no built-in
 multi-rooted layout; Graphviz handles disconnected components in one
 canvas if rendered together.
 
@@ -641,20 +641,20 @@ Pass it as a `tags` entry. The `"highlight"` tag name is the renderer's
 visual emphasis trigger:
 
 ```python
-graph = iterate(..., tags={"highlight": lambda x: is_prime(x)})
+graph = build(..., tags={"highlight": lambda x: is_prime(x)})
 ```
 
 Other tag names are stored on nodes too and accessible via
 `graph["nodes"][vstr]["tags"]`, but only `"highlight"` triggers the
 renderer's fill-darkening logic.
 
-### "I want to iterate on `Fraction` / `Decimal` / other domain numeric types"
+### "I want to use `Fraction` / `Decimal` / other domain numeric types"
 
 The default per-node classification comes from `json_type`, which only
 knows about Python's built-in JSON types. Anything outside that set —
 `fractions.Fraction`, `decimal.Decimal`, `sympy.Rational`, a custom
 quantity class — falls through to `"string"` because those values
-serialise through `str()`. Pass `key_type=` to `iterate` to declare
+serialise through `str()`. Pass `key_type=` to `build` to declare
 the true semantic type.
 
 As a worked example, the continued-fraction recurrence `x ↦ 1 + 1/x`
@@ -722,7 +722,7 @@ visiter build --import sympy:Rational '
 
 `--import MODULE` binds the module itself; `--import MODULE:NAME[,NAME...]`
 binds selected attributes. The option is repeatable and available on
-`iterate`, `to-dot`, and `analyze`.
+`build`, `to-dot`, and `analyze`.
 
 A runnable end-to-end version of this pipeline lives in
 [`demos/custom_key_type.sh`](../demos/custom_key_type.sh).
@@ -775,7 +775,7 @@ otherwise.
 ### Value types
 
 Values in an iteration graph can be any hashable Python object:
-integers, strings, tuples of hashables, frozensets, etc. `iterate`
+integers, strings, tuples of hashables, frozensets, etc. `build`
 keys nodes by `str(value)`, so two values with the same string form
 collide. On JSON output, native JSON types pass through unchanged;
 non-native values are coerced to their `str()` form by the CLI's
@@ -784,7 +784,7 @@ JSON type for edge `from`/`to` and any non-empty string for node
 keys.
 
 To let consumers recover the type of a node value despite JSON's
-string-keys constraint, `iterate` records it explicitly as a
+string-keys constraint, `build` records it explicitly as a
 required `key_type` attribute on each node — using the seven
 JSON Schema primitives (`null`, `boolean`, `integer`, `number`,
 `string`, `array`, `object`) so any JSON consumer can interpret it
@@ -796,12 +796,12 @@ the default `str()` coercion. The renderer consults `key_type`
 directly when deciding whether type-sensitive features
 (`show_binary`, `show_ternary`, `show_factors`, `value_range`)
 should fire — no string-pattern heuristic is involved. Hand-built
-graph dicts and producers other than `iterate` must supply
+graph dicts and producers other than `build` must supply
 `key_type` themselves; the schema enforces this via `required`.
 
 For domain types whose values do not fit the built-in mapping —
 `fractions.Fraction`, `decimal.Decimal`, `sympy.Rational`, a custom
-quantity class — pass `key_type=` to `iterate` to override the
+quantity class — pass `key_type=` to `build` to override the
 default. A bare string sets a single type for every node; a callable
 `value → str | None` classifies per value, with `None` delegating to
 `json_type` for that particular value. Type-sensitive renderer
@@ -856,11 +856,11 @@ That pulls `networkx>=3.0` alongside VisIter's core deps.
 `visiter.analytics` exports two functions:
 
 ```python
-from visiter import iterate, Op, Rule, to_dot
+from visiter import build, Op, Rule, to_dot
 from visiter.analytics import to_networkx, from_networkx
 import networkx as nx
 
-graph = iterate(
+graph = build(
     start=range(1, 30),
     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
     default=Op(lambda x: x + 2, label="+2"),

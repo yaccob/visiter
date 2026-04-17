@@ -116,7 +116,7 @@ def resolve_op_colors(graph, op_colors=None, palette=None):
     Entries in `op_colors` may be either a single hex string (used for both
     fill and edge) or a (fill, edge) tuple. Palette entries follow the same
     string/tuple rule. Assignment order for unmapped ops:
-      - `graph["op_order"]` if present (rule-declaration order, set by iterate)
+      - `graph["op_order"]` if present (rule-declaration order, set by build)
       - otherwise first-seen order over `graph["edges"]`
     When the palette is exhausted a neutral grey pair is used.
     """

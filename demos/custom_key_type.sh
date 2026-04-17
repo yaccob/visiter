@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Iteration on `fractions.Fraction` values, classified as "number" via
-# iterate's `key_type=` override. Runs as a pure CLI pipeline: the
+# build's `key_type=` override. Runs as a pure CLI pipeline: the
 # `visiter build` subcommand binds `Fraction` and `Decimal` into its
 # eval namespace by default, so no --import or Python heredoc is
 # needed for stdlib numeric types.
