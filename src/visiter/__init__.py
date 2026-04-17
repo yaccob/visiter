@@ -36,7 +36,7 @@ from .render_helpers import (
     resolve_op_colors,
 )
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 __all__ = [
     "Op",
