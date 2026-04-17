@@ -238,88 +238,29 @@ VIT
 # --- manual: §7 NetworkX — water jug example ---
 # Two SVGs: full reachability graph (target states highlighted) and
 # shortest-path subgraph (solution). Re-uses the demo helpers.
+# Pure visiter pipelines — no Python heredocs.
 
-PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' > /tmp/visiter_jugs.json
-import json, sys
-from water_jugs import make_rules
-from visiter import iterate
+export PYTHONPATH="../demos:${PYTHONPATH:-}"
 
-graph = iterate(
-    [(0, 0)], make_rules(3, 5), None,
-    tags={"highlight": lambda s: s[0] == 4 or s[1] == 4},
-)
-json.dump(graph, sys.stdout, default=str)
-PY
+# Build the graph.
+echo '[(0, 0)], make_rules(3, 5), None,
+tags={"highlight": lambda s: s[0]==4 or s[1]==4}' \
+  | visiter build --import water_jugs:make_rules \
+  > /tmp/visiter_jugs.json
 
-# Full graph — node_label callback for HTML-table display.
-PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' \
-  | dot -Tsvg > "$OUT/water_jugs_full.svg"
-import json, sys
-from water_jugs import state_label
-from visiter import to_dot
-
-graph = json.load(open("/tmp/visiter_jugs.json"))
-
-dot = to_dot(graph, node_label=lambda k, i: state_label(
-    tuple(int(x) for x in k.strip("()").split(", ")), target=4))
-sys.stdout.write(dot.source)
-PY
+# Full graph with HTML-table labels.
+visiter to-dot --import water_jugs:make_node_label \
+  'node_label=make_node_label(4)' \
+  < /tmp/visiter_jugs.json | dot -Tsvg > "$OUT/water_jugs_full.svg"
 
 # Shortest-path subgraph.
-PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' \
+visiter analyze \
+  --import water_jugs:shortest_path_subgraph \
+  'shortest_path_subgraph(graph, "(0, 0)", 4)' \
+  < /tmp/visiter_jugs.json \
+  | visiter to-dot --import water_jugs:make_node_label \
+    'node_label=make_node_label(4)' \
   | dot -Tsvg > "$OUT/water_jugs_path.svg"
-import json, sys
-import networkx as nx
-from water_jugs import state_label
-from visiter import to_dot
-from visiter.analytics import to_networkx
-
-graph = json.load(open("/tmp/visiter_jugs.json"))
-g = to_networkx(graph)
-
-source = "(0, 0)"
-targets = [n for n in g.nodes
-           if any(int(x) == 4 for x in n.strip("()").split(", "))]
-best_len = None
-all_paths = []
-for t in targets:
-    try:
-        paths = list(nx.all_shortest_paths(g, source, t))
-    except nx.NetworkXNoPath:
-        continue
-    plen = len(paths[0])
-    if best_len is None or plen < best_len:
-        best_len = plen
-        all_paths = paths
-    elif plen == best_len:
-        all_paths.extend(paths)
-
-path_nodes = set()
-path_edges = set()
-for path in all_paths:
-    path_nodes.update(path)
-    for i in range(len(path) - 1):
-        path_edges.add((path[i], path[i + 1]))
-
-sub = {
-    "schema_version": "1",
-    "roots": graph["roots"],
-    "nodes": {k: dict(graph["nodes"][k]) for k in path_nodes},
-    "edges": [e for e in graph["edges"]
-              if (str(e["from"]), str(e["to"])) in path_edges],
-    "pseudo_edges": [],
-    "op_order": graph.get("op_order", []),
-    "op_labels": graph.get("op_labels", {}),
-}
-# Highlight only the goal node(s).
-goal_nodes = set(p[-1] for p in all_paths)
-for key in goal_nodes & path_nodes:
-    sub["nodes"][key].setdefault("tags", []).append("highlight")
-
-dot = to_dot(sub, node_label=lambda k, i: state_label(
-    tuple(int(x) for x in k.strip("()").split(", ")), target=4))
-sys.stdout.write(dot.source)
-PY
 
 rm -f /tmp/visiter_jugs.json
 

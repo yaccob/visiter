@@ -131,6 +131,17 @@ def make_rules():
     return rules
 
 
+def make_node_label():
+    """Return a ``node_label`` callback for ``to_dot``.
+
+    The callback formats each node key (a 9-character board string)
+    as an HTML table with fixed-width cells.
+    """
+    def _label(key, _info):
+        return board_label(key)
+    return _label
+
+
 def empty_board():
     """Return the canonical empty board."""
     return EMPTY * 9

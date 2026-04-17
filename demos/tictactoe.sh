@@ -22,29 +22,22 @@ mkdir -p "$OUT"
 
 DEPTH=${1:-9}
 
-PYTHON="$(head -1 "$(command -v visiter)" | sed 's/^#! *//')"
+export PYTHONPATH="$HERE:${PYTHONPATH:-}"
 
-PYTHONPATH="$HERE:${PYTHONPATH:-}" "$PYTHON" - "$DEPTH" \
-  2>"$OUT/.tictactoe_nodes" <<'PY' \
+# Build → to-dot → Graphviz, pure visiter pipelines.
+echo "[empty_board()],
+make_rules(),
+None,
+max_depth=$DEPTH,
+tags={'highlight': has_winner}" \
+  | visiter build \
+    --import tictactoe:empty_board,make_rules,has_winner \
+  | tee >(python3 -c "import json,sys; print(len(json.load(sys.stdin)['nodes']))" \
+          > "$OUT/.tictactoe_nodes") \
+  | visiter to-dot \
+    --import tictactoe:make_node_label \
+    'node_label=make_node_label()' \
   | dot -Tsvg -o "$OUT/tictactoe.svg"
-import sys
-from tictactoe import empty_board, make_rules, has_winner, board_label
-from visiter import iterate, to_dot
-
-depth = int(sys.argv[1])
-
-graph = iterate(
-    [empty_board()],
-    make_rules(),
-    None,
-    max_depth=depth,
-    tags={"highlight": has_winner},
-)
-
-print(len(graph["nodes"]), file=sys.stderr)
-dot = to_dot(graph, node_label=lambda k, i: board_label(k))
-sys.stdout.write(dot.source)
-PY
 
 NODES=$(cat "$OUT/.tictactoe_nodes")
 rm -f "$OUT/.tictactoe_nodes"
