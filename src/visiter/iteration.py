@@ -391,14 +391,15 @@ def iterate(start, rules, default, *, max_depth=None,
         return info
 
     def add_edge(a, b, op):
-        if (a, b) not in seen_edges:
-            graph["edges"].append({"from": a, "to": b, "op": op})
-            seen_edges.add((a, b))
+        key = (str(a), str(b))
+        if key not in seen_edges:
+            graph["edges"].append({"from": str(a), "to": str(b), "op": op})
+            seen_edges.add(key)
 
     def add_pseudo(x, label):
-        key = (x, label)
+        key = (str(x), label)
         if key not in seen_pseudo:
-            graph["pseudo_edges"].append({"from": x, "op": label})
+            graph["pseudo_edges"].append({"from": str(x), "op": label})
             seen_pseudo.add(key)
 
     def limit_reason():

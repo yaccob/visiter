@@ -241,39 +241,41 @@ VIT
 
 PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' > /tmp/visiter_jugs.json
 import json, sys
-from water_jugs import make_rules, state_label
+from water_jugs import make_rules
 from visiter import iterate
 
-graph = iterate([(0, 0)], make_rules(3, 5), None)
-
-for key, info in graph["nodes"].items():
-    state = tuple(int(x) for x in key.strip("()").split(", "))
-    info["display"] = state_label(state, target=4)
-    if state[0] == 4 or state[1] == 4:
-        info.setdefault("tags", []).append("highlight")
-
-for e in graph["edges"]:
-    e["from"] = str(e["from"])
-    e["to"] = str(e["to"])
-
+graph = iterate(
+    [(0, 0)], make_rules(3, 5), None,
+    tags={"highlight": lambda s: s[0] == 4 or s[1] == 4},
+)
 json.dump(graph, sys.stdout, default=str)
 PY
 
-visiter to-dot 'node_label_attr="display"' \
-  < /tmp/visiter_jugs.json | dot -Tsvg > "$OUT/water_jugs_full.svg"
+# Full graph — node_label callback for HTML-table display.
+PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' \
+  | dot -Tsvg > "$OUT/water_jugs_full.svg"
+import json, sys
+from water_jugs import state_label
+from visiter import to_dot
 
-python3 - /tmp/visiter_jugs.json <<'PY' \
-  | visiter to-dot 'node_label_attr="display"' \
+graph = json.load(open("/tmp/visiter_jugs.json"))
+
+dot = to_dot(graph, node_label=lambda k, i: state_label(
+    tuple(int(x) for x in k.strip("()").split(", ")), target=4))
+sys.stdout.write(dot.source)
+PY
+
+# Shortest-path subgraph.
+PYTHONPATH="../demos:${PYTHONPATH:-}" python3 - <<'PY' \
   | dot -Tsvg > "$OUT/water_jugs_path.svg"
 import json, sys
 import networkx as nx
+from water_jugs import state_label
+from visiter import to_dot
+from visiter.analytics import to_networkx
 
-graph = json.load(open(sys.argv[1]))
-g = nx.DiGraph()
-for key in graph["nodes"]:
-    g.add_node(key)
-for e in graph["edges"]:
-    g.add_edge(str(e["from"]), str(e["to"]), op=e["op"])
+graph = json.load(open("/tmp/visiter_jugs.json"))
+g = to_networkx(graph)
 
 source = "(0, 0)"
 targets = [n for n in g.nodes
@@ -301,20 +303,22 @@ for path in all_paths:
 
 sub = {
     "schema_version": "1",
-    "roots": [source],
-    "nodes": {},
-    "edges": [],
+    "roots": graph["roots"],
+    "nodes": {k: dict(graph["nodes"][k]) for k in path_nodes},
+    "edges": [e for e in graph["edges"]
+              if (str(e["from"]), str(e["to"])) in path_edges],
     "pseudo_edges": [],
     "op_order": graph.get("op_order", []),
     "op_labels": graph.get("op_labels", {}),
 }
-for key in path_nodes:
-    info = dict(graph["nodes"][key])
-    sub["nodes"][key] = info
-for src, dst in path_edges:
-    sub["edges"].append({"from": src, "to": dst, "op": g.edges[src, dst]["op"]})
+# Highlight only the goal node(s).
+goal_nodes = set(p[-1] for p in all_paths)
+for key in goal_nodes & path_nodes:
+    sub["nodes"][key].setdefault("tags", []).append("highlight")
 
-json.dump(sub, sys.stdout, default=str)
+dot = to_dot(sub, node_label=lambda k, i: state_label(
+    tuple(int(x) for x in k.strip("()").split(", ")), target=4))
+sys.stdout.write(dot.source)
 PY
 
 rm -f /tmp/visiter_jugs.json

@@ -257,7 +257,8 @@ def build_dot(graph, op_labels,
               show_binary=False, show_ternary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
               resolved=None,
-              deadline=None, on_limit="raise", node_label_attr=None):
+              deadline=None, on_limit="raise",
+              node_label=None, node_label_attr=None):
     """Build a Graphviz Digraph from a graph dict.
 
     Edges are colored by operation label via `resolve_op_colors`. Nodes are
@@ -327,7 +328,11 @@ def build_dot(graph, op_labels,
         ops = sorted(out_ops.get(vstr, set()))
         fill_colors = [resolved.get(op, fallback)[0] for op in ops]
         display = None
-        if node_label_attr is not None and node_label_attr in info:
+        if node_label is not None:
+            result = node_label(vstr, info)
+            if result is not None:
+                display = result
+        if display is None and node_label_attr is not None and node_label_attr in info:
             display = _format_label_value(info[node_label_attr])
         is_int_key = info["key_type"] == "integer"
         attrs = node_attrs(vstr, fill_colors, hl=hl,

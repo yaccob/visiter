@@ -22,15 +22,14 @@ mkdir -p "$OUT"
 
 DEPTH=${1:-9}
 
-# Use the same Python that visiter was installed with — the shebang
-# of the visiter console script points to the correct interpreter,
-# even when visiter lives in a pipx/venv that system python3 can't see.
 PYTHON="$(head -1 "$(command -v visiter)" | sed 's/^#! *//')"
 
-PYTHONPATH="$HERE:${PYTHONPATH:-}" "$PYTHON" - "$DEPTH" <<'PY' > "$OUT/tictactoe.json"
-import json, sys
+PYTHONPATH="$HERE:${PYTHONPATH:-}" "$PYTHON" - "$DEPTH" \
+  2>"$OUT/.tictactoe_nodes" <<'PY' \
+  | dot -Tsvg -o "$OUT/tictactoe.svg"
+import sys
 from tictactoe import empty_board, make_rules, has_winner, board_label
-from visiter import iterate
+from visiter import iterate, to_dot
 
 depth = int(sys.argv[1])
 
@@ -42,14 +41,11 @@ graph = iterate(
     tags={"highlight": has_winner},
 )
 
-# Add a human-readable display label per node (compact 3×3 grid).
-for key, info in graph["nodes"].items():
-    info["display"] = board_label(key)
-
-json.dump(graph, sys.stdout, default=str)
+print(len(graph["nodes"]), file=sys.stderr)
+dot = to_dot(graph, node_label=lambda k, i: board_label(k))
+sys.stdout.write(dot.source)
 PY
 
-NODES=$(python3 -c "import json; print(len(json.load(open('$OUT/tictactoe.json'))['nodes']))")
-visiter to-dot 'node_label_attr="display"' < "$OUT/tictactoe.json" \
-  | dot -Tsvg -o "$OUT/tictactoe.svg"
+NODES=$(cat "$OUT/.tictactoe_nodes")
+rm -f "$OUT/.tictactoe_nodes"
 echo "wrote $OUT/tictactoe.svg (depth=$DEPTH, $NODES nodes)"

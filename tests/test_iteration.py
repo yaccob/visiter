@@ -17,7 +17,7 @@ def test_basic_descent_forms_cycle():
     g = iterate([1], rules=descent_rules(), default=descent_default())
     # 1 → +2 → 3 → ÷3 → 1 forms a cycle; expect those two nodes.
     assert set(g["nodes"].keys()) == {"1", "3"}
-    assert {(e["from"], e["to"]) for e in g["edges"]} == {(1, 3), (3, 1)}
+    assert {(e["from"], e["to"]) for e in g["edges"]} == {("1", "3"), ("3", "1")}
 
 
 def test_op_order_follows_rule_declaration():
@@ -42,7 +42,7 @@ def test_max_depth_caps_expansion_and_emits_pseudo_edges():
     # Only 1 (depth 0) and 3 (depth 1) should be present.
     assert set(g["nodes"].keys()) == {"1", "3"}
     # 3 is at max_depth; its rule (x%3==0 → x // 3) would fire → pseudo.
-    assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {(3, "x // 3")}
+    assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {("3", "x // 3")}
 
 
 def test_rule_bound_emits_pseudo_edges_not_real_ones():
@@ -51,8 +51,8 @@ def test_rule_bound_emits_pseudo_edges_not_real_ones():
                   bound=lambda x: 2 * x <= 8)]
     g = iterate([1], rules=rules, default=None)
     # Real edges: 1→2, 2→4, 4→8. Pseudo: 8 (would go to 16 but blocked).
-    assert {(e["from"], e["to"]) for e in g["edges"]} == {(1, 2), (2, 4), (4, 8)}
-    assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {(8, "2 * x")}
+    assert {(e["from"], e["to"]) for e in g["edges"]} == {("1", "2"), ("2", "4"), ("4", "8")}
+    assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {("8", "2 * x")}
 
 
 def test_default_fires_only_when_no_rule_matches():
@@ -107,9 +107,9 @@ def test_multiple_rules_fan_out():
     ]
     g = iterate([6], rules=rules, default=None)
     # 6 matches both rules → edges 6→12 and 6→2.
-    out_from_6 = {(e["from"], e["to"]) for e in g["edges"] if e["from"] == 6}
-    assert (6, 12) in out_from_6
-    assert (6, 2) in out_from_6
+    out_from_6 = {(e["from"], e["to"]) for e in g["edges"] if e["from"] == "6"}
+    assert ("6", "12") in out_from_6
+    assert ("6", "2") in out_from_6
 
 
 def test_op_label_defaults_to_function_name():

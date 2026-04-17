@@ -11,7 +11,7 @@
 <!-- nx_28302c203029 -->
 <g id="node1" class="node">
 <title>nx_28302c203029</title>
-<ellipse fill="#ffddcc" stroke="black" stroke-width="3" cx="43.84" cy="-554.77" rx="43.84" ry="21.21"/>
+<ellipse fill="#ffddcc" stroke="black" cx="43.84" cy="-554.77" rx="43.84" ry="21.21"/>
 <text xml:space="preserve" text-anchor="start" x="30.22" y="-551.02" font-family="Times,serif" font-size="11.00">0</text>
 <text xml:space="preserve" text-anchor="start" x="52.22" y="-551.02" font-family="Times,serif" font-size="11.00">0</text>
 </g>
@@ -25,8 +25,8 @@
 <!-- nx_28302c203029&#45;&gt;nx_28302c203529 -->
 <g id="edge1" class="edge">
 <title>nx_28302c203029&#45;&gt;nx_28302c203529</title>
-<path fill="none" stroke="#ddbb99" d="M43.84,-532.28C43.84,-522.24 43.84,-510.07 43.84,-498.97"/>
-<polygon fill="#ddbb99" stroke="#ddbb99" points="47.34,-499 43.84,-489 40.34,-499 47.34,-499"/>
+<path fill="none" stroke="#ddbb99" d="M43.84,-533.17C43.84,-522.89 43.84,-510.22 43.84,-498.71"/>
+<polygon fill="#ddbb99" stroke="#ddbb99" points="47.34,-498.81 43.84,-488.81 40.34,-498.81 47.34,-498.81"/>
 <text xml:space="preserve" text-anchor="middle" x="56.97" y="-507.01" font-family="Times,serif" font-size="9.00" fill="#ddbb99"> fill 5L </text>
 </g>
 <!-- nx_28302c203229 -->
