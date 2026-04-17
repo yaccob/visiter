@@ -158,12 +158,24 @@ def test_viter_import_option_propagates(tmp_path):
     assert out.exists()
 
 
-def test_viter_requires_output_flag():
-    expr = ('range(1,3), [], default=None')
+def test_viter_without_output_writes_svg_to_stdout():
+    # No -o flag → rendered bytes go to stdout so the caller can pipe
+    # them straight into a viewer or a file.
+    expr = ('range(1, 5), [], '
+            'default=Op(lambda x: x+1, label="+1"), max_nodes=4, '
+            'on_limit="stop"')
     r = run_viter(expr)
-    assert r.returncode != 0
-    # Error surfaces via click's usage message, not a traceback.
-    assert "Traceback" not in r.stderr
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith("<?xml")
+    assert "<svg" in r.stdout
+
+
+def test_viter_without_output_format_dot_writes_plain_dot_to_stdout():
+    expr = ('[1], [], default=Op(lambda x: x+1, label="+1"), '
+            'max_nodes=3, on_limit="stop"')
+    r = run_viter(expr, "-f", "dot")
+    assert r.returncode == 0, r.stderr
+    assert "digraph" in r.stdout
 
 
 def test_iterate_pipeline_still_works():

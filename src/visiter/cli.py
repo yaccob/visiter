@@ -353,8 +353,9 @@ _RENDER_DEFAULT_TIME_LIMIT = "00:00:30"
 @click.option("-f", "--format", "fmt", default="svg", show_default=True,
               help="Output format passed to Graphviz (svg, pdf, png, "
                    "dot, …).")
-@click.option("-o", "--output", required=True, metavar="FILE",
-              help="Output file path.")
+@click.option("-o", "--output", default=None, metavar="FILE",
+              help="Output file path. Defaults to stdout, so you can "
+                   "pipe the rendered bytes directly into a viewer.")
 @click.option("--max-nodes", type=int, default=_RENDER_DEFAULT_MAX_NODES,
               show_default=True,
               help="Safety cap on the BFS node count. Argstring can "
@@ -423,9 +424,19 @@ def render_cmd(argstring, render_args, fmt, output,
     dot = _eval_with_source(render_call, render_ns)
 
     if fmt == "dot":
-        Path(output).write_text(dot.source, encoding="utf-8")
+        if output is None:
+            sys.stdout.write(dot.source)
+        else:
+            Path(output).write_text(dot.source, encoding="utf-8")
     else:
-        Path(output).write_bytes(dot.pipe(format=fmt))
+        data = dot.pipe(format=fmt)
+        if output is None:
+            # Binary payload on stdout — go through .buffer so bytes
+            # reach the pipe unchanged (SVG/PDF/PNG all need this).
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+        else:
+            Path(output).write_bytes(data)
 
 
 def main():

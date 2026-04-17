@@ -562,6 +562,12 @@ viter 'range(1, 100), …' --max-nodes 100000 --time-limit 00:02:00 -o big.svg
 
 # PDF instead of SVG:
 viter '...' -f pdf -o out.pdf
+
+# Omit -o to pipe the rendered bytes straight to a viewer or
+# to another tool that reads from stdin:
+viter '...' | display              # ImageMagick
+viter '...' -f png | viu -          # terminal image viewer
+viter '...' -f dot | xdot -         # interactive Graphviz UI
 ```
 
 When you need to save the JSON between stages, re-render the same
