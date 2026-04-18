@@ -16,9 +16,11 @@ attributes. See each subcommand's `--help`.
 """
 
 import importlib
+import inspect
 import itertools
 import json
 import linecache
+import re
 import sys
 from decimal import Decimal
 from fractions import Fraction
@@ -107,6 +109,31 @@ def _read_argstring(file):
             "Empty argstring. Pass a .vit file, pipe an expression "
             "to stdin, or see --help.")
     return text
+
+
+def _friendly_type_error(exc, func):
+    """Re-raise a TypeError from an eval'd call as a clear click.UsageError.
+
+    Extracts the offending parameter name from the exception message and
+    lists the valid parameters from the function's signature, so the user
+    sees what went wrong and what is available — without a raw traceback.
+    """
+    msg = str(exc)
+    # Extract the unknown kwarg name from Python's error message, e.g.
+    # "build() got an unexpected keyword argument 'bogus'"
+    m = re.search(r"unexpected keyword argument '(\w+)'", msg)
+    unknown = m.group(1) if m else None
+    sig = inspect.signature(func)
+    params = [p.name for p in sig.parameters.values()
+              if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
+    hint = ", ".join(params)
+    if unknown:
+        detail = (f"unknown parameter {unknown!r}.\n"
+                  f"  Available parameters: {hint}\n"
+                  f"  (visiter {__version__})")
+    else:
+        detail = f"{msg}\n  Available parameters: {hint}\n  (visiter {__version__})"
+    raise click.UsageError(detail) from None
 
 
 def _eval_with_source(source, ns):
@@ -226,7 +253,10 @@ def build_cmd(file, imports):
     argstring = _read_argstring(file)
     ns = {"Rule": Rule, "Op": Op, "build": build,
           **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
-    graph = _eval_with_source(f"build({argstring})", ns)
+    try:
+        graph = _eval_with_source(f"build({argstring})", ns)
+    except TypeError as exc:
+        _friendly_type_error(exc, build)
     json.dump(graph, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
 
@@ -256,7 +286,10 @@ def to_dot_cmd(argstring, input_path, output, imports):
           **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     call = (f"to_dot(graph, {argstring})"
             if argstring.strip() else "to_dot(graph)")
-    dot = _eval_with_source(call, ns)
+    try:
+        dot = _eval_with_source(call, ns)
+    except TypeError as exc:
+        _friendly_type_error(exc, to_dot)
 
     if output:
         with open(output, "w") as f:
@@ -445,7 +478,10 @@ def render_cmd(file, render_args, fmt, output,
     argstring = _read_argstring(file)
     build_ns = {"Rule": Rule, "Op": Op, "build": _build_with_caps,
                 **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
-    graph = _eval_with_source(f"build({argstring})", build_ns)
+    try:
+        graph = _eval_with_source(f"build({argstring})", build_ns)
+    except TypeError as exc:
+        _friendly_type_error(exc, build)
 
     # JSON-round-trip so graph keys end up as strings (matches what
     # `visiter build | visiter to-dot` would see), without this
@@ -457,7 +493,10 @@ def render_cmd(file, render_args, fmt, output,
                  **_DEFAULT_EVAL_BINDINGS, **_resolve_imports(imports)}
     render_call = (f"to_dot(graph, {render_args})"
                    if render_args.strip() else "to_dot(graph)")
-    dot = _eval_with_source(render_call, render_ns)
+    try:
+        dot = _eval_with_source(render_call, render_ns)
+    except TypeError as exc:
+        _friendly_type_error(exc, to_dot)
 
     if fmt == "dot":
         if output is None:

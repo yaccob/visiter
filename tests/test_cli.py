@@ -268,6 +268,41 @@ def test_viter_fraction_default_namespace():
     assert "3/2" in r.stdout
 
 
+# ---- signature mismatch error messages --------------------------------------
+
+def test_build_unknown_kwarg_shows_helpful_error():
+    expr = '[1], [], None, bogus_param=42'
+    r = run("build", input_=expr)
+    assert r.returncode != 0
+    assert "bogus_param" in r.stderr
+    assert "Traceback" not in r.stderr
+
+
+def test_to_dot_unknown_kwarg_shows_helpful_error():
+    build = run("build", input_='[1], [], None')
+    assert build.returncode == 0
+    r = run("to-dot", "bogus_option=True", input_=build.stdout)
+    assert r.returncode != 0
+    assert "bogus_option" in r.stderr
+    assert "Traceback" not in r.stderr
+
+
+def test_viter_unknown_build_kwarg_shows_helpful_error():
+    expr = '[1], [], None, bogus_param=42'
+    r = run_viter(input_=expr)
+    assert r.returncode != 0
+    assert "bogus_param" in r.stderr
+    assert "Traceback" not in r.stderr
+
+
+def test_viter_unknown_render_kwarg_shows_helpful_error():
+    expr = '[1], [], Op(lambda x: x+1, label="+1"), max_nodes=3, on_limit="stop"'
+    r = run_viter("--render", "bogus_render_opt=True", input_=expr)
+    assert r.returncode != 0
+    assert "bogus_render_opt" in r.stderr
+    assert "Traceback" not in r.stderr
+
+
 def test_viter_import_option_propagates(tmp_path):
     out = tmp_path / "sqrt.svg"
     expr = ('[16], [Rule(lambda x: x > 2, '
