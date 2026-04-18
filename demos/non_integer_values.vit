@@ -3,11 +3,11 @@
 # drop the last character. Default: none — words ending in a consonant
 # are leaves. Demonstrates that build's value type can be any
 # hashable, str()-able Python object.
-build(
+viter(
     ["banana", "garage", "queue", "iterator"],
     [Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
           Op(lambda s: s[:-1], label="drop-vowel"))],
     None,
     max_depth=None,
     max_nodes=None,
-).to_dot().render()
+)

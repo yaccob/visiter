@@ -506,3 +506,16 @@ def build(start, rules, default, *, max_depth=64,
         )
 
     return graph
+
+
+def viter(*args, **kwargs):
+    """One-shot convenience: build, convert to DOT, and render.
+
+    Equivalent to ``build(*args, **kwargs).to_dot().render()``.
+    All arguments are forwarded to ``build()``.
+
+    Use the explicit chain when you need ``to_dot`` options::
+
+        build(...).to_dot(anchor=1, radius=5).render()
+    """
+    return build(*args, **kwargs).to_dot().render()

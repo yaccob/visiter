@@ -35,7 +35,7 @@ from .dot import Dot
 from .filters import NxFilter
 from .graph import Graph
 from .io import write
-from .iteration import Op, Rule, build, parse_range
+from .iteration import Op, Rule, build, parse_range, viter
 from .to_dot import to_dot
 from .render_helpers import (
     DEFAULT_OP_PALETTE,
@@ -56,6 +56,7 @@ __all__ = [
     "Op",
     "Rule",
     "build",
+    "viter",
     "to_dot",
     "Graph",
     "Dot",

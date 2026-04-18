@@ -70,11 +70,6 @@ def has_winner(board):
     return False
 
 
-def is_draw(board):
-    """True if the board is full with no winner."""
-    return EMPTY not in board and not has_winner(board)
-
-
 def is_terminal(board):
     """True if the game is over (win or draw)."""
     return has_winner(board) or EMPTY not in board

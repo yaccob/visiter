@@ -1,29 +1,86 @@
 #!/usr/bin/env viter
 # Water jug problem: two jugs with capacities A and B.
 # Classic puzzle: "How do you measure exactly 4L with a 3L and 5L jug?"
-# — the answer is a shortest path in the reachability graph.
+#
+# Produces two outputs:
+#   stdout              — full reachability graph (target states highlighted)
+#   water_jugs_path.svg — only the shortest path(s) to the target
 #
 # Usage:
 #   viter demos/water_jugs.vit                              # default 3L+5L, target 4
 #   viter demos/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
 import argparse
-import sys
 import os
-
-sys.path.insert(0, os.path.dirname(__file__))
-from water_jugs import make_rules, make_node_label
+import networkx as nx
+from visiter.analytics import to_networkx, from_networkx
 
 p = argparse.ArgumentParser()
 p.add_argument("--cap-a", type=int, default=3)
 p.add_argument("--cap-b", type=int, default=5)
 p.add_argument("--target", type=int, default=4)
+p.add_argument("--path-out", default=None,
+               help="Output file for shortest-path SVG (default: water_jugs_path.svg next to this script)")
 args = p.parse_args()
 
-build(
+A, B, T = args.cap_a, args.cap_b, args.target
+path_out = args.path_out or os.path.join(os.path.dirname(__file__), "out", "water_jugs_path.svg")
+
+# Build the full reachability graph
+g = build(
     [(0, 0)],
-    make_rules(args.cap_a, args.cap_b),
+    [
+        Rule(lambda s: s[0] < A,  Op(lambda s: (A, s[1]),     label=f"fill {A}L")),
+        Rule(lambda s: s[1] < B,  Op(lambda s: (s[0], B),     label=f"fill {B}L")),
+        Rule(lambda s: s[0] > 0,  Op(lambda s: (0, s[1]),     label=f"empty {A}L")),
+        Rule(lambda s: s[1] > 0,  Op(lambda s: (s[0], 0),     label=f"empty {B}L")),
+        Rule(lambda s: s[0] > 0 and s[1] < B,
+             Op(lambda s: (max(0, s[0]-(B-s[1])), min(B, s[0]+s[1])), label=f"{A}L→{B}L")),
+        Rule(lambda s: s[1] > 0 and s[0] < A,
+             Op(lambda s: (min(A, s[0]+s[1]), max(0, s[1]-(A-s[0]))), label=f"{B}L→{A}L")),
+    ],
     None,
-    max_depth=None,
-    max_nodes=None,
-    tags={"highlight": lambda s: s[0] == args.target or s[1] == args.target},
-).to_dot(node_label=make_node_label(args.target)).render()
+    max_depth=None, max_nodes=None,
+    tags={"highlight": lambda s: s[0] == T or s[1] == T},
+)
+
+# Render full graph to stdout
+g.to_dot().render()
+
+# Find shortest path(s) to any node containing the target amount
+nxg = to_networkx(g)
+source = "(0, 0)"
+goals = [n for n in nxg.nodes
+         if any(int(x) == T for x in n.strip("()").split(", "))]
+
+best_len = None
+path_edges = set()
+goal_nodes = set()
+for goal in goals:
+    if not nx.has_path(nxg, source, goal):
+        continue
+    for path in nx.all_shortest_paths(nxg, source, goal):
+        plen = len(path)
+        if best_len is not None and plen > best_len:
+            continue
+        if best_len is None or plen < best_len:
+            best_len = plen
+            path_edges.clear()
+            goal_nodes.clear()
+        goal_nodes.add(path[-1])
+        for i in range(len(path) - 1):
+            path_edges.add((path[i], path[i + 1]))
+
+# Extract subgraph and tag goal nodes
+sub = nxg.edge_subgraph(path_edges).copy()
+for n in goal_nodes:
+    tags = list(sub.nodes[n].get("tags", []))
+    if "highlight" not in tags:
+        tags.append("highlight")
+    sub.nodes[n]["tags"] = tags
+
+# Render shortest-path subgraph to file
+os.makedirs(os.path.dirname(path_out), exist_ok=True)
+Graph(from_networkx(sub)).to_dot().render(file=path_out)
+
+import sys
+print(f"wrote {path_out}", file=sys.stderr)
