@@ -16,12 +16,11 @@ or `max_depth` suppressed expansion. A second stage (`to_dot`) turns
 the resulting graph dict into a Graphviz drawing with cropping,
 coloring, wedged-pie fills for branching nodes, and dashed "ghost
 stubs" at every cut boundary. The graph dict has a published JSON
-Schema, and a CLI (`build | to-dot | dot`) makes the stages
-pipe-composable.
+Schema. The `viter` CLI executes `.vit` files — self-contained Python
+scripts that use the fluent API (`build(...).to_dot().render()`).
 
 In one phrase: **orbit graphs for discrete iterations under guarded
-rules**, with free/scriptable/Graphviz-native rendering and Unix-pipe
-ergonomics.
+rules**, with free/scriptable/Graphviz-native rendering.
 
 ## The direct superset nobody talks about in Python-land
 
@@ -36,7 +35,7 @@ extensions.
 
 If you have a Mathematica license and live in notebooks, `NestGraph`
 does what VisIter does and then some. The honest positioning is that
-VisIter occupies the **free, scriptable, Graphviz-native, Unix-pipe**
+VisIter occupies the **free, scriptable, Graphviz-native**
 version of this niche — plus an opinionated rendering layer (see
 below).
 
@@ -142,7 +141,7 @@ discrete reachability graphs.
 | --------------------------------------------------- | :-----: | :------: | :-------: | :---: | :--: |
 | Seed + rules → orbit graph                          |    ✓    |    —¹    |     ✓     |   ✓   |  ✓²  |
 | Free (not paywalled)                                |    ✓    |    ✓     |     —     |   ✓   |  ✓   |
-| Scriptable / non-interactive / pipe-composable      |    ✓    |    ✓³    |     —     |  ✓³   |  ✓³  |
+| Scriptable / non-interactive                        |    ✓    |    ✓³    |     —     |  ✓³   |  ✓³  |
 | Guard + op as a first-class pair                    |    ✓    |    —     |     —     |   ✓   |  ✓²  |
 | Arbitrary hashable values as nodes                  |    ✓    |    ✓     |     ✓     |  ✓⁴   |  —   |
 | Pseudo-edges for structural cutoffs                 |    ✓    |    —     |     —     |   —   |  —   |
@@ -156,13 +155,13 @@ discrete reachability graphs.
 
 ¹ NetworkX can do this, but the wiring is yours to write.
 ² For Petri-net-shaped rules only.
-³ Strictly: invocable from a script, but not designed around Unix
-  pipe composition like VisIter's `build | to-dot | dot`.
+³ Strictly: invocable from a script, but not designed around
+  scriptable composition like VisIter's `.vit` files.
 ⁴ Any term in the user's signature, not any hashable Python object.
 ⁵ Via `NeighborhoodGraph` / `Subgraph`; separate primitive.
 ⁶ Via the `[analytics]` extra, which bridges to NetworkX: install with
-  `pip install visiter[analytics]`, then use `visiter.analytics.to_networkx`
-  or the `visiter analyze` CLI subcommand. See
+  `pip install visiter[analytics]`, then use `NxFilter` in the fluent
+  chain or `visiter.analytics.to_networkx` directly. See
   [manual §7](manual.md#7-integrating-with-networkx).
 
 Every ✓ in the VisIter column is demonstrated by a runnable `.vit`
@@ -202,10 +201,9 @@ for the full list.
   render boundary" — as a distinct visual primitive, without
   inventing your own vocabulary.
 - You want the data stage and the render stage decoupled — save JSON
-  once, render it many ways; or validate it against a schema mid-pipe;
-  or keep the graph for later re-analysis.
-- You want Unix-pipe composition (`visiter build … | visiter
-  to-dot … | dot -Tsvg > out.svg`) rather than a REPL session.
+  via `.tap(write(...))`, render it many ways, or validate it against
+  a schema; or keep the graph for later re-analysis.
+- You want scriptable `.vit` files rather than a REPL session.
 
 ## Honest positioning
 

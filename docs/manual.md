@@ -468,122 +468,74 @@ expression that is spliced into a call to the corresponding function
 and `eval`'d. `Op`, `Rule`, `build`, `to_dot`, and `graph` (for the
 renderer) live in the eval namespace.
 
-The CLI exposes the entire Python API without per-flag glue: anything
-you can write as kwargs to `build(...)` or `to_dot(...)` works as
-the argument string.
+A `.vit` file is a Python script executed by the `viter` command.
+The exec namespace pre-binds `Op`, `Rule`, `build`, `viter`, `to_dot`,
+`Graph`, `Dot`, `NxFilter`, `write`, `Fraction`, and `Decimal`.
 
-`visiter --help` lists available subcommands.
-
-### build
-
-```
-visiter build 'ARGSTRING'      → JSON graph on stdout
-```
-
-Examples:
+### Running a `.vit` file
 
 ```bash
-visiter build 'range(1, 30),
-    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-    default=Op(lambda x: x+2, label="+2")'
+viter script.vit                  # SVG to stdout
+viter script.vit > out.svg        # redirect to file
+viter script.vit --arg value      # pass args to the script
+viter --version                   # show version
 ```
 
-```bash
-visiter build 'start=[1], rules=[
-    Rule(lambda x: True, Op(lambda x: 2*x, label="×2"), bound=lambda x: 2*x <= 64),
-    Rule(lambda x: True, Op(lambda x: 2*x+1, label="×2+1"), bound=lambda x: 2*x+1 <= 64),
-], default=None, max_depth=8'
+All arguments after the `.vit` path are passed through as `sys.argv`
+to the script. The script can use `argparse` or raw `sys.argv`.
+
+### One-shot: `viter()`
+
+For the simplest case — build, render with defaults — the `viter()`
+shortcut wraps `build().to_dot().render()`:
+
+```python
+#!/usr/bin/env viter
+viter(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+)
 ```
 
-### to_dot
+### Fluent chain
 
-```
-visiter to-dot 'ARGSTRING' [--input FILE] [-o FILE]
-```
+When you need `to_dot` options, filters, or intermediate saves, use
+the explicit chain:
 
-Reads graph JSON from stdin (or `--input FILE`); writes DOT to stdout
-(or `-o FILE`).
-
-```bash
-visiter to-dot 'anchor=1, radius=8, direction="backward", show_factors=True' < graph.json > out.dot
-```
-
-### Pipe composition
-
-```bash
-visiter build '...' | visiter to-dot '...' | dot -Tsvg > out.svg
+```python
+#!/usr/bin/env viter
+build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+).tap(write(file="graph.json"))       \
+ .to_dot(anchor=1, radius=8)         \
+ .render(file="out.svg")
 ```
 
-### One-shot: `viter` / `visiter render`
+### Safety defaults
 
-For the "I just want the image" case there is a second entry point
-that runs `build → to-dot → Graphviz` in a single call. Both spellings
-are equivalent:
+`build()` ships conservative defaults so a typo'd rule can't silently
+burn minutes or gigabytes:
 
-```bash
-viter 'ARGSTRING' [--render 'TO_DOT_ARGSTRING'] [-f FORMAT] -o FILE
-visiter render 'ARGSTRING' [--render 'TO_DOT_ARGSTRING'] [-f FORMAT] -o FILE
-```
-
-`ARGSTRING` is the same Python expression `build` takes. `--render`
-is optional and mirrors the argstring `to-dot` would take. Default
-`--format` is `svg`; `pdf`, `png`, `dot`, and everything else that
-Graphviz's `dot` speaks work as well. `--import` is accepted on the
-same terms as on the pipe subcommands.
-
-Unlike the pipe path, `viter` ships **safe defaults** tuned for
-exploration, so a typo'd rule can't silently burn minutes or
-gigabytes:
-
-| Flag            | Default       | Purpose                                    |
+| Parameter       | Default       | Purpose                                    |
 | --------------- | ------------- | ------------------------------------------ |
-| `--max-nodes`   | `10000`       | BFS node cap (vs. `build`'s 1M default)  |
-| `--time-limit`  | `00:00:30`    | Wall-clock limit on the build phase        |
-| `--max-depth`   | *(unset)*     | Optional BFS depth cap                     |
+| `max_nodes`     | `1024`        | BFS node cap                               |
+| `max_depth`     | `64`          | BFS depth cap                              |
+| `on_limit`      | `"stop"`      | Stop and warn (vs. `"raise"`)              |
+| `time_limit`    | `None`        | Wall-clock limit (`"hh:mm:ss"`)            |
 
-Overflow behaviour is always `on_limit="stop"` — you get whatever
-was built so far, plus a one-line warning on stderr naming the cap
-that tripped. Raise the cap with the matching flag, or pass the
-same kwarg explicitly in `ARGSTRING` (argstring always wins over
-CLI flag, via `dict.setdefault` semantics).
+When a limit is hit, `build()` emits a warning to stderr and returns
+the partial graph. Pass `None` to disable a limit, or a higher value
+to raise it.
 
-```bash
-# Simplest form: auto-derived labels, no label= needed, stdout output.
-viter 'range(1, 30), [Rule(lambda x: x%3==0, Op(lambda x: x//3))], Op(lambda x: x+2)'
+### Errors
 
-# Explicit labels + write to file:
-viter 'range(1, 30),
-       [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-       Op(lambda x: x+2, label="+2")' \
-  -o descent.svg
-
-# Add to_dot options via --render:
-viter '...' --render 'anchor=1, radius=8, show_factors=True' -o out.svg
-
-# Raise caps for a larger exploration:
-viter 'range(1, 100), …' --max-nodes 100000 --time-limit 00:02:00 -o big.svg
-
-# PDF instead of SVG:
-viter '...' -f pdf -o out.pdf
-
-# Omit -o to pipe the rendered bytes straight to a viewer or
-# to another tool that reads from stdin:
-viter '...' | display              # ImageMagick
-viter '...' -f png | viu -          # terminal image viewer
-viter '...' -f dot | xdot -         # interactive Graphviz UI
-```
-
-When you need to save the JSON between stages, re-render the same
-graph with different views, insert schema validation, or run NetworkX
-over the data, drop back to the pipe subcommands.
-
-### Errors and `eval`
-
-Any error in the argstring surfaces as a normal Python exception
-(SyntaxError, NameError, TypeError) with its native traceback. There is
-no parser frontend to misdiagnose input. `eval` is appropriate here
-because this is a local research tool: running `visiter build '…'` is
-no different in trust model from running any local Python script.
+Any error surfaces as a normal Python exception with its native
+traceback. `exec` is appropriate here because this is a local research
+tool: running `viter script.vit` is no different in trust model from
+running any local Python script.
 
 ---
 
@@ -663,17 +615,17 @@ golden ratio. With `Fraction` the arithmetic is exact; without the
 graph dict — honest for JSON-on-the-wire, misleading for what the
 values actually mean.
 
-Because `Fraction` and `Decimal` are bound by default in the CLI's
-eval namespace, the whole pipeline runs as one shell command:
+`Fraction` and `Decimal` are pre-bound in the `.vit` namespace:
 
-```bash
-visiter build '
-    start=[Fraction(1)],
-    rules=[Rule(lambda x: True, Op(lambda x: 1 + 1/x, label="1 + 1/x"))],
-    default=None,
+```python
+#!/usr/bin/env viter
+viter(
+    [Fraction(1)],
+    [Rule(lambda x: True, Op(lambda x: 1 + 1/x))],
+    None,
     max_depth=7,
     key_type="number",
-' | visiter to-dot '' | dot -Tsvg > golden.svg
+)
 ```
 
 ![golden-ratio convergents as Fraction, classified as "number"](images/golden_ratio_convergents.svg)
@@ -689,13 +641,13 @@ Two forms of `key_type=` are available:
   and `Fraction`s coexisting) and you want `json_type`'s defaults
   on the integers but an override on the rationals:
 
-  ```bash
-  visiter build '
-      start=[1, Fraction(1, 2)],
-      rules=[],
-      default=None,
+  ```python
+  build(
+      [1, Fraction(1, 2)],
+      [],
+      None,
       key_type=lambda v: "number" if isinstance(v, Fraction) else None,
-  '
+  )
   ```
 
 The override is a **declaration of intent**, not a transformation:
@@ -707,21 +659,20 @@ them. Pick the classification that matches how downstream consumers
 should treat the data, and keep the data compatible with the claim.
 
 **Beyond `Fraction` and `Decimal`.** Any other type — `sympy.Rational`,
-a third-party quantity class, your own domain object — is one
-`--import` away:
+a third-party quantity class, your own domain object — just needs a
+standard `import` in the `.vit` file:
 
-```bash
-visiter build --import sympy:Rational '
-    start=[Rational(1, 2)],
-    rules=[Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x, label="1 + 1/x"))],
-    default=None,
+```python
+#!/usr/bin/env viter
+from sympy import Rational
+
+viter(
+    [Rational(1, 2)],
+    [Rule(lambda x: x.q < 100, Op(lambda x: 1 + 1/x))],
+    None,
     key_type="number",
-'
+)
 ```
-
-`--import MODULE` binds the module itself; `--import MODULE:NAME[,NAME...]`
-binds selected attributes. The option is repeatable and available on
-`build`, `to-dot`, and `analyze`.
 
 A runnable end-to-end version of this pipeline lives in
 [`demos/basics/golden_ratio.vit`](../demos/basics/golden_ratio.vit).
@@ -823,11 +774,20 @@ fields, new enum values) in place. Breaking changes ship under `/v2/`
 with a new `$id`; v1 stays frozen. The `schema_version` field on the
 graph instance identifies the major version.
 
-Validate a graph document against the bundled schema via the CLI:
+Validate a graph document programmatically:
 
-```bash
+```python
 pip install visiter[validate]
-visiter build '...' | visiter validate
+```
+
+```python
+import json
+from importlib.resources import files
+from jsonschema import Draft202012Validator
+
+schema = json.loads(files("visiter").joinpath(
+    "schemas/v1/graph.schema.json").read_text())
+Draft202012Validator(schema).validate(graph_dict)
 ```
 
 ---
@@ -907,40 +867,33 @@ automatically (no `repr` quotes); scalars render as plain `str()`:
 dot = to_dot(graph, node_label_attr="members")
 ```
 
-```bash
-visiter analyze 'nx.condensation(graph)' \
-  | visiter to-dot 'node_label_attr="members"' \
-  | dot -Tsvg > scc.svg
+```python
+# In a .vit file — NxFilter handles the round-trip:
+build(...).filter(NxFilter(nx.condensation)).to_dot(node_label_attr="members").render()
 ```
 
 See [`demos/integration/condensation.vit`](../demos/integration/condensation.vit)
 for the full end-to-end example.
 
-### CLI
+### Fluent chain: `NxFilter`
 
-The `analyze` subcommand mirrors the Python API over shell pipes:
+For graph-to-graph transforms, `NxFilter` plugs into the fluent chain:
 
-```bash
-visiter build '...' | visiter analyze '<python expression>'
+```python
+#!/usr/bin/env viter
+import networkx as nx
+
+build(...).filter(NxFilter(nx.condensation)).to_dot().render()
 ```
 
-`graph` (a `networkx.DiGraph`) and `nx` are pre-bound in the eval
-namespace. The expression's result is written to stdout as JSON; if
-it is itself a NetworkX graph, it is emitted as a VisIter graph dict,
-so the output flows straight into `visiter to-dot`:
+For ad-hoc inspection (scalar results, cycle lists, centrality), use
+NetworkX directly in the `.vit` file:
 
-```bash
-# Count things.
-visiter build '...' | visiter analyze 'nx.number_of_nodes(graph)'
-
-# List cycles.
-visiter build '...' | visiter analyze 'list(nx.simple_cycles(graph))'
-
-# Pipe a derived graph back into rendering.
-visiter build '...' \
-  | visiter analyze 'nx.condensation(graph)' \
-  | visiter to-dot '' \
-  | dot -Tsvg > scc.svg
+```python
+from visiter.analytics import to_networkx
+nxg = to_networkx(g)
+print(list(nx.simple_cycles(nxg)))
+print(nx.in_degree_centrality(nxg))
 ```
 
 See the [`demos/integration/`](../demos/integration/) directory for

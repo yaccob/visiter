@@ -3,19 +3,17 @@
 > **TL;DR** — build a graph, render it:
 >
 > ```python
-> from visiter import build, Op, Rule, to_dot
->
-> graph = build(
->     start=[1],
->     rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
->     default=Op(lambda x: x + 2),
+> #!/usr/bin/env viter
+> viter(
+>     [1],
+>     [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+>     Op(lambda x: x + 2),
 > )
-> to_dot(graph).render("first", format="svg")
 > ```
 >
-> Or from the shell: `echo '[1], [Rule(…)], Op(…)' | visiter build | visiter to-dot | dot -Tsvg > out.svg`
+> Save as `first.vit`, run with `viter first.vit > out.svg`.
 >
-> Read on for the concepts behind these two lines.
+> Read on for the concepts behind this.
 
 ---
 
@@ -25,7 +23,7 @@ question. Skim the questions first; jump in where it feels useful.
 
 When you want details, the [manual](manual.md) is the reference. When
 you want to **see** something running, the [demos](../demos/) ship as
-runnable shell scripts (`make demo` runs them all).
+runnable `.vit` files (`make demo` runs them all).
 
 ---
 
@@ -60,14 +58,12 @@ Start from 1. Whenever the value is divisible by 3, divide it by 3.
 Otherwise, add 2.
 
 ```python
-from visiter import build, Op, Rule, to_dot
-
-graph = build(
-    start=[1],
-    rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    default=Op(lambda x: x + 2),
+#!/usr/bin/env viter
+viter(
+    [1],
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
 )
-to_dot(graph).render("first", format="svg")
 ```
 
 Read it back: from 1 the rule doesn't apply (1 isn't divisible by 3),
@@ -150,8 +146,9 @@ Three orthogonal mechanisms, used in combination as needed:
 - **`max_depth`** — soft cap on BFS depth. Nodes at the limit are
   kept, just not expanded.
 - **`max_nodes`** / **`time_limit`** — hard resource limits. Default
-  behaviour is to raise; pass `on_limit="stop"` to get the partial
-  graph instead.
+  behaviour is to stop and emit a warning; pass `on_limit="raise"`
+  to get an exception instead. Defaults: `max_nodes=1024`,
+  `max_depth=64`; pass `None` to disable.
 
 `Rule.bound` and `max_depth` produce **pseudo-edges** — entries that
 record "an op would have fired here". The renderer turns them into
@@ -292,30 +289,39 @@ character is a consonant — string nodes, integer-free graph:
 
 ## What does the command line look like?
 
-The `visiter` CLI mirrors the Python API: each subcommand takes one
-positional argument that is a Python expression, spliced into the
-function call.
+A `.vit` file is a Python script using the fluent API. The `viter`
+command executes it with `Op`, `Rule`, `build`, `to_dot`, `viter`,
+`write`, `NxFilter`, `Graph`, `Fraction`, and `Decimal` pre-bound:
 
-```bash
-visiter build 'range(1, 30),
-                 [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],
-                 default=Op(lambda x: x+2, label="+2")' \
-  | visiter to-dot 'anchor=1, radius=8, direction="backward"' \
-  | dot -Tsvg > descent.svg
+```python
+#!/usr/bin/env viter
+build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+).to_dot(anchor=1, radius=8, direction="backward").render()
 ```
 
-Three programs, one pipeline:
+```bash
+viter descent.vit > out.svg
+```
 
-- `visiter build` writes a JSON graph to stdout.
-- `visiter to-dot` reads JSON from stdin, writes DOT to stdout.
-- `dot` is system Graphviz; takes DOT, produces SVG/PDF/PNG/etc.
+For the simplest case — build + render with defaults — the `viter()`
+shortcut does it in one call:
 
-Because the stages are decoupled, you can save the JSON once and
-render it many times with different views — or run a schema validator
-between stages as a sanity check.
+```python
+#!/usr/bin/env viter
+viter(range(1, 10), [Rule(...)], Op(...))
+```
 
-See the [demos/](../demos/) for runnable examples covering the full
-pipeline.
+`.vit` files can use `argparse` for parametrization — all arguments
+after the `.vit` path are passed through as `sys.argv`:
+
+```bash
+viter demos/applications/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
+```
+
+See the [demos/](../demos/) for runnable examples.
 
 ---
 
@@ -329,14 +335,30 @@ just hands the graph over.
 
 ```bash
 pip install visiter[analytics]
-visiter build '...' | visiter analyze 'list(nx.simple_cycles(graph))'
 ```
 
-`graph` is the NetworkX `DiGraph`, `nx` is the library; the expression
-is evaluated and its result emitted as JSON. If the expression returns
-a NetworkX graph (e.g. `nx.condensation(graph)`), it flows straight
-back into `visiter to-dot` for rendering. See the
-[manual's NetworkX section](manual.md#7-integrating-with-networkx) and
+Use `NxFilter` to plug a NetworkX transform into the fluent chain:
+
+```python
+#!/usr/bin/env viter
+import networkx as nx
+
+build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+).filter(NxFilter(nx.condensation)).to_dot().render()
+```
+
+For ad-hoc inspection, use NetworkX directly in the `.vit` file:
+
+```python
+from visiter.analytics import to_networkx
+nxg = to_networkx(graph)
+print(list(nx.simple_cycles(nxg)))
+```
+
+See the [manual's NetworkX section](manual.md#7-integrating-with-networkx) and
 the [`demos/integration/`](../demos/integration/) examples for more.
 
 ## What does the JSON Schema buy me?
@@ -348,8 +370,8 @@ The graph-dict shape is formally specified as a JSON Schema (Draft
 That gives you three things:
 
 - A machine-readable contract for tools that consume `build` output.
-- A pipeline checkpoint: `visiter validate` reads JSON on stdin and
-  exits non-zero if the shape drifted.
+- A pipeline checkpoint: validate graph dicts programmatically via
+  `jsonschema`.
 - A versioning anchor: future breaking changes ship under `/v2/`,
   v1 stays frozen, instances self-identify via `schema_version`.
 

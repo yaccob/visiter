@@ -206,57 +206,27 @@ def test_schema_allows_extra_node_attributes():
     assert not errors, errors
 
 
-# ---- analyze CLI ------------------------------------------------------------
+# ---- NxFilter integration ---------------------------------------------------
 
-def test_analyze_cli_scalar_result(tmp_path):
-    import os
-    import subprocess
-    import sys
+def test_nx_filter_condensation_produces_valid_graph():
+    from visiter import Graph
+    from visiter.filters import NxFilter
 
-    env = {**os.environ,
-           "PATH": os.path.dirname(sys.executable) + os.pathsep
-                   + os.environ.get("PATH", "")}
-    expr = ('range(1,10), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
-    iterate_run = subprocess.run(["visiter", "build"],
-                                 capture_output=True, text=True,
-                                 input=expr, env=env)
-    assert iterate_run.returncode == 0, iterate_run.stderr
-
-    analyze_run = subprocess.run(
-        ["visiter", "analyze", "nx.number_of_nodes(graph)"],
-        input=iterate_run.stdout, capture_output=True, text=True, env=env)
-    assert analyze_run.returncode == 0, analyze_run.stderr
-    result = json.loads(analyze_run.stdout)
-    assert isinstance(result, int)
-    assert result > 0
+    vg = sample_graph()
+    filtered = vg.filter(NxFilter(nx.condensation))
+    assert isinstance(filtered, Graph)
+    assert "nodes" in filtered
+    assert "edges" in filtered
+    # Condensation nodes carry "members" attribute.
+    for info in filtered["nodes"].values():
+        assert "members" in info
 
 
-def test_analyze_cli_graph_result_is_piped_back_into_to_dot(tmp_path):
-    import os
-    import subprocess
-    import sys
+def test_nx_filter_condensation_renders():
+    from visiter import Dot
+    from visiter.filters import NxFilter
 
-    env = {**os.environ,
-           "PATH": os.path.dirname(sys.executable) + os.pathsep
-                   + os.environ.get("PATH", "")}
-    expr = ('range(1,10), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], default=Op(lambda x: x+2, label="+2")')
-    iterate_run = subprocess.run(["visiter", "build"],
-                                 capture_output=True, text=True,
-                                 input=expr, env=env)
-    # Condensation returns an nx.DiGraph; analyze should emit it as a
-    # VisIter-schema JSON document so the next stage can to-dot it.
-    analyze_run = subprocess.run(
-        ["visiter", "analyze", "nx.condensation(graph)"],
-        input=iterate_run.stdout, capture_output=True, text=True, env=env)
-    assert analyze_run.returncode == 0, analyze_run.stderr
-    doc = json.loads(analyze_run.stdout)
-    assert "nodes" in doc
-    assert "edges" in doc
-
-    todot_run = subprocess.run(["visiter", "to-dot", ""],
-                               input=analyze_run.stdout,
-                               capture_output=True, text=True, env=env)
-    assert todot_run.returncode == 0, todot_run.stderr
-    assert "digraph" in todot_run.stdout
+    vg = sample_graph()
+    dot = vg.filter(NxFilter(nx.condensation)).to_dot()
+    assert isinstance(dot, Dot)
+    assert "digraph" in dot.source
