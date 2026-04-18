@@ -1,0 +1,10 @@
+#!/usr/bin/env viter
+# Tight 2-hop crop around node 1. Ghost stubs show where edges
+# leave the rendered region.
+build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    Op(lambda x: x + 2, label="+2"),
+    max_depth=None,
+    max_nodes=None,
+).to_dot(anchor=1, radius=2, direction="backward").render()

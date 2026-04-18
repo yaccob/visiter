@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.11.0] — 2026-04-18
+
+### Breaking
+- **Fluent API**: `build()` now returns a `Graph` (dict subclass) with
+  chainable methods: `.to_dot()`, `.filter()`, `.tap()`, `.peek()`.
+  `to_dot()` returns a `Dot` wrapper with `.render()`, `.tap()`.
+  Existing code that treats `build()` result as a plain dict still works.
+- **CLI rewrite**: `visiter` subcommand-based CLI replaced by `viter`,
+  a simple executor for `.vit` files. No subcommands, no own flags.
+  All arguments after the `.vit` path are passed to the script.
+  The `visiter` entry point is removed.
+- **`.vit` file format**: `.vit` files are now full Python scripts using
+  the fluent API, not eval'd argstring fragments. Example:
+  `build(10, [...], None).to_dot().render()`.
+- **Safety defaults**: `max_nodes` default 1024 (was 1M), `max_depth`
+  default 64 (was None), `on_limit` default "stop" (was "raise").
+  Warnings emitted to stderr when limits are hit.
+- **`visiter validate`** removed from CLI. Schema stays in the package.
+- **Pipe composition** (`visiter build | visiter to-dot`) removed.
+  Use the fluent chain in a single `.vit` file instead.
+
+### Added
+- `Graph` class (dict subclass) with `.to_dot()`, `.filter()`, `.tap()`.
+- `Dot` class (graphviz.Digraph wrapper) with `.render()`, `.tap()`.
+- `write()` factory function for use with `.tap()`:
+  `.tap(write())` (stdout) or `.tap(write(file="g.json"))` (file).
+- `NxFilter` for NetworkX graph transforms in the fluent chain:
+  `build(...).filter(NxFilter(nx.condensation)).to_dot().render()`.
+- `__file__` bound in `.vit` exec namespace to the script path.
+- `sys.argv` passthrough for parameterized `.vit` files.
+- New demo `.vit` files replacing most shell-script wrappers.
+
+### Changed
+- `to_dot()` returns `Dot` wrapper instead of raw `graphviz.Digraph`.
+- Demo scripts converted from `.sh` wrappers to self-contained `.vit` files.
+
+---
+
 ## [0.10.0] — 2026-04-17
 
 ### Breaking

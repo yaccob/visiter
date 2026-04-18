@@ -1,4 +1,4 @@
-"""Tests for the top-level `visiter` and `viter` CLI surfaces."""
+"""Tests for the ``viter`` CLI executor."""
 
 import os
 import subprocess
@@ -10,304 +10,254 @@ VENV_BIN = os.path.dirname(sys.executable)
 ENV = {**os.environ, "PATH": VENV_BIN + os.pathsep + os.environ.get("PATH", "")}
 
 
-def run(*args, input_=None):
-    return subprocess.run(["visiter", *args], capture_output=True, text=True,
-                          input=input_, env=ENV)
-
-
-def run_viter(*args, input_=None):
+def run_viter(*args):
     return subprocess.run(["viter", *args], capture_output=True, text=True,
-                          input=input_, env=ENV)
+                          env=ENV)
 
 
-# ---- visiter top-level -------------------------------------------------------
+# ---- basic flags ------------------------------------------------------------
 
-def test_top_level_version_flag():
-    from visiter import __version__
-    r = run("--version")
-    assert r.returncode == 0, r.stderr
-    assert __version__ in r.stdout
-
-
-def test_top_level_help_describes_tool_and_lists_subcommands():
-    r = run("--help")
-    assert r.returncode == 0
-    out = r.stdout
-    assert "build" in out
-    assert "to-dot" in out
-    assert "validate" in out
-    assert "analyze" in out
-    assert "render" in out
-    assert "iteration" in out.lower() or "graph" in out.lower()
-
-
-@pytest.mark.parametrize("sub", ["build", "to-dot", "validate", "analyze",
-                                  "render"])
-def test_subcommand_help_works(sub):
-    r = run(sub, "--help")
-    assert r.returncode == 0, r.stderr
-    assert "Usage" in r.stdout or "usage" in r.stdout
-
-
-# ---- visiter build (stdin / file) -------------------------------------------
-
-def test_build_reads_from_stdin():
-    expr = ('range(1,8), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], '
-            'Op(lambda x: x+2, label="+2")')
-    r = run("build", input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert '"schema_version": "1"' in r.stdout
-    assert '"op_order"' in r.stdout
-
-
-def test_build_reads_from_file(tmp_path):
-    vit = tmp_path / "test.vit"
-    vit.write_text("range(1,5), [], Op(lambda x: x+1, label=\"+1\"), "
-                   "max_nodes=4, on_limit=\"stop\"")
-    r = run("build", str(vit))
-    assert r.returncode == 0, r.stderr
-    assert '"schema_version": "1"' in r.stdout
-
-
-def test_build_strips_comment_lines_from_file(tmp_path):
-    vit = tmp_path / "commented.vit"
-    vit.write_text("#!/usr/bin/env viter\n"
-                   "# A comment line\n"
-                   "range(1,5), [], Op(lambda x: x+1, label=\"+1\"), "
-                   "max_nodes=4, on_limit=\"stop\"\n")
-    r = run("build", str(vit))
-    assert r.returncode == 0, r.stderr
-    assert '"schema_version"' in r.stdout
-
-
-def test_build_auto_labeled_ops_via_stdin():
-    expr = ('range(1, 8), [Rule(lambda x: x % 3 == 0, '
-            'Op(lambda x: x // 3))], Op(lambda x: x + 2)')
-    r = run("build", input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert '"x // 3"' in r.stdout
-    assert '"x + 2"' in r.stdout
-
-
-def test_build_multiline_stdin_auto_labels():
-    expr = ('range(1, 8),\n'
-            '[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],\n'
-            'Op(lambda x: x + 2)')
-    r = run("build", input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert '"x + 2"' in r.stdout
-
-
-def test_build_fraction_default_import():
-    expr = ('[Fraction(1)], [Rule(lambda x: True, '
-            'Op(lambda x: 1 + 1/x, label="step"))], None, '
-            'max_depth=3, key_type="number"')
-    r = run("build", input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert '"key_type": "number"' in r.stdout
-    assert '"3/2"' in r.stdout
-
-
-def test_build_decimal_default_import():
-    r = run("build", input_='[Decimal("1.5")], [], None')
-    assert r.returncode == 0, r.stderr
-    assert '"1.5"' in r.stdout
-
-
-def test_build_import_option_binds_module_attribute():
-    expr = ('[16], [Rule(lambda x: x > 2, '
-            'Op(lambda x: int(sqrt(x)), label="sqrt"))], None, max_nodes=5')
-    r = run("build", "--import", "math:sqrt", input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert '"4"' in r.stdout
-
-
-def test_build_import_option_multiple_names():
-    expr = ('[10], [Rule(lambda x: x > 0, '
-            'Op(lambda x: floor(sqrt(x)), label="floor sqrt"))], '
-            'None, max_nodes=5')
-    r = run("build", "--import", "math:sqrt,floor", input_=expr)
-    assert r.returncode == 0, r.stderr
-
-
-def test_build_import_option_module_itself():
-    expr = ('[16], [Rule(lambda x: x > 2, '
-            'Op(lambda x: int(math.sqrt(x)), label="sqrt"))], None, max_nodes=5')
-    r = run("build", "--import", "math", input_=expr)
-    assert r.returncode == 0, r.stderr
-
-
-def test_build_import_rejects_unknown_module():
-    r = run("build", "--import", "no_such_module_xyz",
-            input_='[1], [], None')
-    assert r.returncode != 0
-    assert "cannot import module" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_build_import_rejects_unknown_attribute():
-    r = run("build", "--import", "math:not_a_math_function",
-            input_='[1], [], None')
-    assert r.returncode != 0
-    assert "not_a_math_function" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_validate_pipeline_still_works():
-    expr = ('range(1,5), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], '
-            'Op(lambda x: x+2, label="+2")')
-    build = run("build", input_=expr)
-    assert build.returncode == 0
-    validate = run("validate", input_=build.stdout)
-    assert validate.returncode == 0, validate.stderr
-
-
-def test_unknown_subcommand_exits_nonzero():
-    r = run("nonsense")
-    assert r.returncode != 0
-
-
-# ---- viter one-shot CLI (stdin / file) --------------------------------------
-
-def test_viter_renders_svg_from_stdin():
-    expr = ('range(1, 8), [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], '
-            'Op(lambda x: x+2, label="+2")')
-    r = run_viter(input_=expr)
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.startswith("<?xml")
-    assert "<svg" in r.stdout
-
-
-def test_viter_renders_svg_from_file(tmp_path):
-    vit = tmp_path / "test.vit"
-    vit.write_text("range(1, 8),\n"
-                   "[Rule(lambda x: x%3==0, Op(lambda x: x//3))],\n"
-                   "Op(lambda x: x+2)\n")
-    out = tmp_path / "out.svg"
-    r = run_viter(str(vit), "-o", str(out))
-    assert r.returncode == 0, r.stderr
-    assert out.exists()
-    body = out.read_text(encoding="utf-8")
-    assert "<svg" in body
-
-
-def test_viter_file_with_shebang_and_comments(tmp_path):
-    vit = tmp_path / "demo.vit"
-    vit.write_text("#!/usr/bin/env viter\n"
-                   "# Descent graph\n"
-                   "range(1, 8),\n"
-                   "[Rule(lambda x: x%3==0, Op(lambda x: x//3))],\n"
-                   "Op(lambda x: x+2)\n")
-    r = run_viter(str(vit))
-    assert r.returncode == 0, r.stderr
-    assert "<svg" in r.stdout
-
-
-def test_viter_help_shows_render_help_not_group_help():
-    r = run_viter("--help")
-    assert r.returncode == 0
-    assert "FILE" in r.stdout
-    assert "--max-nodes" in r.stdout
-
-
-def test_viter_version_flag_reports_tool_version():
+def test_version_flag():
     from visiter import __version__
     r = run_viter("--version")
     assert r.returncode == 0, r.stderr
     assert __version__ in r.stdout
 
 
-def test_viter_warns_on_node_cap_hit():
-    expr = ('[0], [Rule(lambda x: True, '
-            'Op(lambda x: x+1, label="+1"))], None')
-    r = run_viter("--max-nodes", "5", input_=expr)
+def test_help_flag():
+    r = run_viter("--help")
+    assert r.returncode == 0
+    assert "viter" in r.stdout
+    assert ".vit" in r.stdout
+
+
+# ---- executing .vit files ---------------------------------------------------
+
+def test_vit_file_renders_svg_to_stdout(tmp_path):
+    vit = tmp_path / "simple.vit"
+    vit.write_text(
+        'build(\n'
+        '    range(1, 8),\n'
+        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
+        '    Op(lambda x: x+2, label="+2"),\n'
+        ').to_dot().render()\n'
+    )
+    r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
-    assert "node count reached 5" in r.stderr
+    assert "<svg" in r.stdout
 
 
-def test_viter_file_max_nodes_overrides_cli_flag():
-    # When the .vit file carries its own max_nodes, the CLI flag
-    # must not fight it — setdefault semantics.
-    expr = ('[0], [Rule(lambda x: True, '
-            'Op(lambda x: x+1, label="+1"))], None, '
-            'max_nodes=20')
-    r = run_viter("--max-nodes", "5", input_=expr)
+def test_vit_file_renders_svg_to_file(tmp_path):
+    vit = tmp_path / "to_file.vit"
+    out = tmp_path / "out.svg"
+    vit.write_text(
+        'build(\n'
+        '    range(1, 8),\n'
+        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
+        '    Op(lambda x: x+2, label="+2"),\n'
+        f').to_dot().render(file="{out}")\n'
+    )
+    r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
-    assert "node count reached 5" not in r.stderr
-
-
-def test_viter_render_option_forwarded_to_to_dot(tmp_path):
-    out = tmp_path / "factors.svg"
-    expr = ('[6], [Rule(lambda x: x%3==0, '
-            'Op(lambda x: x//3, label="÷3"))], '
-            'Op(lambda x: x+2, label="+2"), max_depth=3')
-    r = run_viter("--render", "show_factors=True", "-o", str(out),
-                  input_=expr)
-    assert r.returncode == 0, r.stderr
+    assert out.exists()
     body = out.read_text(encoding="utf-8")
-    assert "2" in body and "3" in body
+    assert "<svg" in body
 
 
-def test_viter_format_dot_writes_plain_dot_to_stdout():
-    expr = ('[1], [], Op(lambda x: x+1, label="+1"), '
-            'max_nodes=3, on_limit="stop"')
-    r = run_viter("-f", "dot", input_=expr)
+def test_vit_file_writes_json_via_tap(tmp_path):
+    vit = tmp_path / "json_out.vit"
+    out = tmp_path / "graph.json"
+    vit.write_text(
+        'build(\n'
+        '    range(1, 5),\n'
+        '    [],\n'
+        '    Op(lambda x: x+1, label="+1"),\n'
+        f').tap(write(file="{out}"))\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert out.exists()
+    import json
+    data = json.loads(out.read_text())
+    assert "schema_version" in data
+
+
+def test_vit_file_writes_json_to_stdout(tmp_path):
+    vit = tmp_path / "json_stdout.vit"
+    vit.write_text(
+        'build(\n'
+        '    range(1, 5),\n'
+        '    [],\n'
+        '    Op(lambda x: x+1, label="+1"),\n'
+        ').tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert '"schema_version"' in r.stdout
+
+
+def test_vit_file_dot_format(tmp_path):
+    vit = tmp_path / "dot_fmt.vit"
+    vit.write_text(
+        'build(\n'
+        '    [1], [], Op(lambda x: x+1, label="+1"),\n'
+        '    max_nodes=3,\n'
+        ').to_dot().render(format="dot")\n'
+    )
+    r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
     assert "digraph" in r.stdout
 
 
-def test_viter_fraction_default_namespace():
-    expr = ('[Fraction(1)], [Rule(lambda x: True, '
-            'Op(lambda x: 1 + 1/x, label="step"))], '
-            'None, max_depth=4, key_type="number"')
-    r = run_viter(input_=expr)
+def test_vit_file_with_shebang(tmp_path):
+    vit = tmp_path / "shebang.vit"
+    vit.write_text(
+        '#!/usr/bin/env viter\n'
+        '# A comment\n'
+        'build(\n'
+        '    range(1, 5),\n'
+        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
+        '    Op(lambda x: x+2, label="+2"),\n'
+        ').to_dot().render()\n'
+    )
+    r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
-    assert "3/2" in r.stdout
+    assert "<svg" in r.stdout
 
 
-# ---- signature mismatch error messages --------------------------------------
+# ---- namespace bindings -----------------------------------------------------
 
-def test_build_unknown_kwarg_shows_helpful_error():
-    expr = '[1], [], None, bogus_param=42'
-    r = run("build", input_=expr)
-    assert r.returncode != 0
-    assert "bogus_param" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_to_dot_unknown_kwarg_shows_helpful_error():
-    build = run("build", input_='[1], [], None')
-    assert build.returncode == 0
-    r = run("to-dot", "bogus_option=True", input_=build.stdout)
-    assert r.returncode != 0
-    assert "bogus_option" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_viter_unknown_build_kwarg_shows_helpful_error():
-    expr = '[1], [], None, bogus_param=42'
-    r = run_viter(input_=expr)
-    assert r.returncode != 0
-    assert "bogus_param" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_viter_unknown_render_kwarg_shows_helpful_error():
-    expr = '[1], [], Op(lambda x: x+1, label="+1"), max_nodes=3, on_limit="stop"'
-    r = run_viter("--render", "bogus_render_opt=True", input_=expr)
-    assert r.returncode != 0
-    assert "bogus_render_opt" in r.stderr
-    assert "Traceback" not in r.stderr
-
-
-def test_viter_import_option_propagates(tmp_path):
-    out = tmp_path / "sqrt.svg"
-    expr = ('[16], [Rule(lambda x: x > 2, '
-            'Op(lambda x: int(sqrt(x)), label="sqrt"))], '
-            'None, max_nodes=5')
-    r = run_viter("--import", "math:sqrt", "-o", str(out), input_=expr)
+def test_fraction_in_namespace(tmp_path):
+    vit = tmp_path / "fraction.vit"
+    vit.write_text(
+        'build(\n'
+        '    [Fraction(1)],\n'
+        '    [Rule(lambda x: True, Op(lambda x: 1 + 1/x, label="step"))],\n'
+        '    None,\n'
+        '    max_depth=4,\n'
+        '    key_type="number",\n'
+        ').tap(write())\n'
+    )
+    r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
-    assert out.exists()
+    assert '"3/2"' in r.stdout
+
+
+def test_decimal_in_namespace(tmp_path):
+    vit = tmp_path / "decimal.vit"
+    vit.write_text(
+        'build([Decimal("1.5")], [], None).tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert '"1.5"' in r.stdout
+
+
+def test_custom_import_in_vit(tmp_path):
+    vit = tmp_path / "custom_import.vit"
+    vit.write_text(
+        'import math\n'
+        'build(\n'
+        '    [16],\n'
+        '    [Rule(lambda x: x > 2, Op(lambda x: int(math.sqrt(x)), label="sqrt"))],\n'
+        '    None,\n'
+        '    max_nodes=5,\n'
+        ').tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert '"4"' in r.stdout
+
+
+# ---- sys.argv passthrough ---------------------------------------------------
+
+def test_sys_argv_passthrough(tmp_path):
+    vit = tmp_path / "args.vit"
+    vit.write_text(
+        'import sys\n'
+        'n = int(sys.argv[1]) if len(sys.argv) > 1 else 5\n'
+        'build(range(1, n), [], None).tap(write())\n'
+    )
+    r = run_viter(str(vit), "3")
+    assert r.returncode == 0, r.stderr
+    import json
+    data = json.loads(r.stdout)
+    assert set(data["nodes"].keys()) == {"1", "2"}
+
+
+def test_sys_argv_with_argparse(tmp_path):
+    vit = tmp_path / "argparse_demo.vit"
+    vit.write_text(
+        'import argparse\n'
+        'p = argparse.ArgumentParser()\n'
+        'p.add_argument("--start", type=int, default=5)\n'
+        'args = p.parse_args()\n'
+        'build(range(1, args.start), [], None).tap(write())\n'
+    )
+    r = run_viter(str(vit), "--start", "4")
+    assert r.returncode == 0, r.stderr
+    import json
+    data = json.loads(r.stdout)
+    assert set(data["nodes"].keys()) == {"1", "2", "3"}
+
+
+# ---- __file__ binding -------------------------------------------------------
+
+def test_dunder_file_is_bound(tmp_path):
+    vit = tmp_path / "check_file.vit"
+    vit.write_text(
+        'import sys\n'
+        'print(__file__, file=sys.stderr)\n'
+        'build([1], [], None).tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert str(vit.resolve()) in r.stderr
+
+
+# ---- error handling ---------------------------------------------------------
+
+def test_missing_file_exits_nonzero():
+    r = run_viter("/nonexistent/file.vit")
+    assert r.returncode != 0
+    assert "not found" in r.stderr
+
+
+def test_syntax_error_shows_traceback(tmp_path):
+    vit = tmp_path / "bad_syntax.vit"
+    vit.write_text("build((\n")
+    r = run_viter(str(vit))
+    assert r.returncode != 0
+    assert "SyntaxError" in r.stderr
+
+
+# ---- safety caps (warnings) ------------------------------------------------
+
+def test_max_nodes_default_warns(tmp_path):
+    vit = tmp_path / "warn_nodes.vit"
+    vit.write_text(
+        'build(\n'
+        '    [0],\n'
+        '    [Rule(lambda x: True, Op(lambda x: x+1, label="+1"))],\n'
+        '    None,\n'
+        '    max_nodes=5,\n'
+        ').tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert "max_nodes=5" in r.stderr
+
+
+def test_max_depth_default_warns(tmp_path):
+    vit = tmp_path / "warn_depth.vit"
+    vit.write_text(
+        'build(\n'
+        '    [0],\n'
+        '    [Rule(lambda x: True, Op(lambda x: x+1, label="+1"))],\n'
+        '    None,\n'
+        '    max_depth=3,\n'
+        ').tap(write())\n'
+    )
+    r = run_viter(str(vit))
+    assert r.returncode == 0, r.stderr
+    assert "max_depth=3" in r.stderr

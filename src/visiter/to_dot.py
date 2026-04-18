@@ -1,7 +1,8 @@
-"""Convert iteration graphs into Graphviz Digraph objects (DOT)."""
+"""Convert iteration graphs into Dot objects for the fluent pipeline."""
 
 import warnings
 
+from .dot import Dot
 from .render_helpers import (build_dot, check_deadline, format_op_label,
                              parse_time_limit, resolve_op_colors,
                              _PALETTE_FALLBACK, _node_id)
@@ -100,7 +101,7 @@ def to_dot(graph, *, op_labels=None,
     get a dashed "ghost" stub as a visual cue that the graph continues.
 
     Returns:
-        graphviz.Digraph
+        Dot (wrapper around graphviz.Digraph with .render(), .tap())
     """
     deadline = parse_time_limit(time_limit)
 
@@ -186,7 +187,7 @@ def to_dot(graph, *, op_labels=None,
 
     for i, (kept, op, kept_is_src) in enumerate(cut_edges):
         if check_deadline(deadline, on_limit, dot, "in ghost-edge loop") is dot:
-            return dot
+            return Dot(dot)
         direction_tag = "out" if kept_is_src else "in"
         ghost_id = f"ghost_{direction_tag}_{kept}_{i}"
         edge_label = effective_labels.get(op, op)
@@ -197,4 +198,4 @@ def to_dot(graph, *, op_labels=None,
         dot.edge(*endpoints, label=f" {edge_label} ", style="dashed",
                  color=color, fontcolor=color, arrowhead="normal")
 
-    return dot
+    return Dot(dot)

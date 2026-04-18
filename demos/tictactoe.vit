@@ -1,0 +1,30 @@
+#!/usr/bin/env viter
+# Tic-Tac-Toe: game tree from the empty board, with symmetry reduction.
+# Highlighted nodes are terminal positions where someone has won.
+#
+# max_depth controls how many half-moves deep the tree goes.
+# Default is 9 (full game — 765 nodes). Pass --depth N for a preview.
+#
+# Usage:
+#   viter demos/tictactoe.vit                         # full game
+#   viter demos/tictactoe.vit --depth 3               # compact preview
+#   viter demos/tictactoe.vit --depth 3 > out.svg
+import argparse
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(__file__))
+from tictactoe import empty_board, make_rules, has_winner, make_node_label
+
+p = argparse.ArgumentParser()
+p.add_argument("--depth", type=int, default=9)
+args = p.parse_args()
+
+build(
+    [empty_board()],
+    make_rules(),
+    None,
+    max_depth=args.depth,
+    max_nodes=None,
+    tags={"highlight": has_winner},
+).to_dot(node_label=make_node_label()).render()

@@ -1,0 +1,14 @@
+#!/usr/bin/env viter
+# Multi-op fills: nodes with 2+ outgoing ops get wedged pie-slice fills.
+# Node 30 is divisible by 2, 3 AND 5 → three outgoing edges → three slices.
+build(
+    range(1, 50),
+    [
+        Rule(lambda x: x % 2 == 0, Op(lambda x: x // 2, label="÷2")),
+        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3")),
+        Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5, label="÷5")),
+    ],
+    Op(lambda x: x + 1, label="+1"),
+    max_depth=4,
+    max_nodes=None,
+).to_dot(anchor=1, radius=10, direction="backward").render()

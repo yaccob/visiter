@@ -1,0 +1,15 @@
+#!/usr/bin/env viter
+# Reverse binary tree: from 1, doubling and double-plus-one until 64.
+# Demonstrates build with Rule.bound and multi-op wedged fills.
+build(
+    [1],
+    [
+        Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
+             bound=lambda x: 2 * x <= 64),
+        Rule(lambda x: True, Op(lambda x: 2 * x + 1, label="×2+1"),
+             bound=lambda x: 2 * x + 1 <= 64),
+    ],
+    None,
+    max_depth=None,
+    max_nodes=None,
+).to_dot(show_binary=True).render()

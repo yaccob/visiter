@@ -1,0 +1,13 @@
+#!/usr/bin/env viter
+# Iteration on fractions.Fraction values: continued-fraction recurrence
+# for the golden ratio: x → 1 + 1/x, starting at 1.
+# With exact rational arithmetic the trajectory is
+# 1, 2, 3/2, 5/3, 8/5, 13/8, 21/13, 34/21 — Fibonacci-ratio convergents to φ.
+build(
+    [Fraction(1)],
+    [Rule(lambda x: True, Op(lambda x: 1 + 1 / x, label="1 + 1/x"))],
+    None,
+    max_depth=7,
+    max_nodes=None,
+    key_type="number",
+).to_dot().render()

@@ -2,6 +2,7 @@ import ast
 import inspect
 import linecache
 import time
+import warnings
 from collections import namedtuple
 
 
@@ -242,9 +243,9 @@ def parse_range(s):
     return result
 
 
-def build(start, rules, default, *, max_depth=None,
-            max_nodes=1_000_000, time_limit=None,
-            on_limit="raise", tags=None, key_type=None):
+def build(start, rules, default, *, max_depth=64,
+            max_nodes=1024, time_limit=None,
+            on_limit="stop", tags=None, key_type=None):
     """Build a graph by applying rules repeatedly from each starting value.
 
     At each value x, every Rule whose condition(x) is True contributes an
@@ -273,15 +274,17 @@ def build(start, rules, default, *, max_depth=None,
     Termination:
       - A node is expanded at most once. Reaching a known node adds the edge
         but does not recurse — natural stop for cycles and joins.
-      - `max_depth` caps the BFS frontier. Nodes at exactly `max_depth` are
-        kept but not expanded; any rule (or default) that would fire for
-        them becomes a pseudo-edge, so the renderer marks them as frontier
-        stubs with the op's color (same visual vocabulary as `bound`).
-      - `max_nodes` bounds the total graph size.
+      - `max_depth` caps the BFS frontier (default 64). Nodes at exactly
+        `max_depth` are kept but not expanded; any rule (or default) that
+        would fire for them becomes a pseudo-edge, so the renderer marks
+        them as frontier stubs with the op's color (same visual vocabulary
+        as `bound`). Pass ``None`` to disable the depth limit.
+      - `max_nodes` bounds the total graph size (default 1024). Pass ``None``
+        to disable.
       - `time_limit` ("hh:mm:ss") bounds wall-clock time.
-      - `on_limit`: "raise" aborts with RuntimeError when max_nodes or
-        time_limit is hit (default — treats resource limits as a
-        divergence assertion). "stop" returns the partial graph.
+      - `on_limit`: "stop" (default) returns the partial graph and emits a
+        warning to stderr when any limit is hit. "raise" aborts with
+        RuntimeError instead.
         `max_depth` is always a soft topological stop, never raises.
 
     Args:
@@ -303,6 +306,7 @@ def build(start, rules, default, *, max_depth=None,
             `Decimal`) to participate in type-sensitive rendering.
 
     Returns:
+        Graph (dict subclass) with keys:
         {
             "schema_version": "1",
             "roots": [int, ...],
@@ -313,10 +317,16 @@ def build(start, rules, default, *, max_depth=None,
             "op_labels": {op_id: label, ...}  # display label per op id
         }
 
+        The returned Graph supports fluent chaining::
+
+            build(...).to_dot().render()
+            build(...).tap(write(file="g.json")).to_dot().render()
+
     `schema_version` matches the path segment of the bundled JSON Schema
     (`schemas/v1/graph.schema.json`). Breaking changes bump the major and
     ship under `/v2/` with v1 frozen.
     """
+    from .graph import Graph
     if on_limit not in ("raise", "stop"):
         raise ValueError(f"on_limit must be 'raise' or 'stop', got {on_limit!r}")
     if isinstance(start, int):
@@ -380,10 +390,10 @@ def build(start, rules, default, *, max_depth=None,
         h, m, s = map(int, time_limit.split(":"))
         deadline = time.time() + h * 3600 + m * 60 + s
 
-    graph = {"schema_version": "1",
-             "roots": list(start), "nodes": {}, "edges": [],
-             "pseudo_edges": [], "op_order": op_order,
-             "op_labels": op_labels}
+    graph = Graph({"schema_version": "1",
+                   "roots": list(start), "nodes": {}, "edges": [],
+                   "pseudo_edges": [], "op_order": op_order,
+                   "op_labels": op_labels})
     seen_edges = set()
     seen_pseudo = set()
 
@@ -416,6 +426,12 @@ def build(start, rules, default, *, max_depth=None,
     def handle_limit(reason, context):
         if on_limit == "raise":
             raise RuntimeError(f"{reason} reached {context}")
+        warnings.warn(
+            f"build: {reason} reached {context}; output is truncated. "
+            f"Pass a higher limit or None to disable.",
+            UserWarning,
+            stacklevel=4,
+        )
         return graph
 
     def fire(x, op, next_depth):
@@ -449,8 +465,11 @@ def build(start, rules, default, *, max_depth=None,
         frontier.append(n)
 
     depth = 0
+    depth_limited = False
     while frontier:
         at_max = max_depth is not None and depth >= max_depth
+        if at_max:
+            depth_limited = True
         next_frontier = []
         for x in frontier:
             any_matched = False
@@ -477,5 +496,13 @@ def build(start, rules, default, *, max_depth=None,
                         next_frontier.append(nxt)
         depth += 1
         frontier = next_frontier
+
+    if depth_limited and on_limit != "raise":
+        warnings.warn(
+            f"build: max_depth={max_depth} reached; output is truncated. "
+            f"Pass a higher max_depth or None to disable.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     return graph

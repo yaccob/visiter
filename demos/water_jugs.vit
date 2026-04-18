@@ -1,0 +1,29 @@
+#!/usr/bin/env viter
+# Water jug problem: two jugs with capacities A and B.
+# Classic puzzle: "How do you measure exactly 4L with a 3L and 5L jug?"
+# — the answer is a shortest path in the reachability graph.
+#
+# Usage:
+#   viter demos/water_jugs.vit                              # default 3L+5L, target 4
+#   viter demos/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
+import argparse
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(__file__))
+from water_jugs import make_rules, make_node_label
+
+p = argparse.ArgumentParser()
+p.add_argument("--cap-a", type=int, default=3)
+p.add_argument("--cap-b", type=int, default=5)
+p.add_argument("--target", type=int, default=4)
+args = p.parse_args()
+
+build(
+    [(0, 0)],
+    make_rules(args.cap_a, args.cap_b),
+    None,
+    max_depth=None,
+    max_nodes=None,
+    tags={"highlight": lambda s: s[0] == args.target or s[1] == args.target},
+).to_dot(node_label=make_node_label(args.target)).render()

@@ -1,0 +1,14 @@
+#!/usr/bin/env viter
+# Op color stability (b): third rule appended — x // 5 for multiples
+# of 5. Pre-existing op colors stay in place; x // 5 takes the next
+# palette slot.
+build(
+    range(1, 30),
+    [
+        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3)),
+        Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
+    ],
+    Op(lambda x: x + 2),
+    max_depth=None,
+    max_nodes=None,
+).to_dot(anchor=1, radius=10, direction="backward").render()

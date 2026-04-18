@@ -2,10 +2,9 @@
 
 Public API:
 
-    build(start, rules, default, *, max_depth=None, max_nodes=..., ...)
+    build(start, rules, default, *, max_depth=64, max_nodes=1024, ...)
         Build a graph by applying guard-and-operation Rules from each start
-        via BFS, tracking per-node depth and optional pseudo-edges for
-        structural bounds.
+        via BFS.  Returns a Graph (dict subclass) supporting fluent chaining.
 
     Op(func, *, label=None, id=None)
         An operation: a callable taking the current value, plus
@@ -17,10 +16,25 @@ Public API:
         bound distinguishes "stop here" from "not applicable".
 
     to_dot(graph, *, anchor=..., radius=..., op_colors=..., ...)
-        Turn a build-result into a Graphviz Digraph, with cropping,
-        coloring, ghost stubs, and node annotations.
+        Turn a build-result into a Dot object for rendering.
+
+    Graph
+        dict subclass with fluent methods: .to_dot(), .filter(), .tap()
+
+    Dot
+        Wrapper around graphviz.Digraph: .render(), .tap(), .source
+
+Fluent pipeline::
+
+    build(...).to_dot().render()
+    build(...).tap(write(file="g.json")).to_dot().render(file="out.svg")
+    build(...).filter(NxFilter(nx.condensation)).to_dot().render()
 """
 
+from .dot import Dot
+from .filters import NxFilter
+from .graph import Graph
+from .io import write
 from .iteration import Op, Rule, build, parse_range
 from .to_dot import to_dot
 from .render_helpers import (
@@ -35,14 +49,23 @@ from .render_helpers import (
     resolve_op_colors,
 )
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 __all__ = [
+    # Core API
     "Op",
     "Rule",
     "build",
-    "parse_range",
     "to_dot",
+    "Graph",
+    "Dot",
+    # Filters
+    "NxFilter",
+    # I/O
+    "write",
+    # Utilities
+    "parse_range",
+    # Render helpers
     "DEFAULT_OP_PALETTE",
     "build_dot",
     "darken",
@@ -52,5 +75,6 @@ __all__ = [
     "node_attrs",
     "parse_time_limit",
     "resolve_op_colors",
+    # Version
     "__version__",
 ]

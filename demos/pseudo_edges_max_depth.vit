@@ -1,0 +1,13 @@
+#!/usr/bin/env viter
+# Pseudo-edges from max_depth: same rules, no bounds; expansion stops
+# at depth 2. Same visual vocabulary as Rule.bound ghost stubs.
+build(
+    [1, 5],
+    [
+        Rule(lambda x: True, Op(lambda x: 2 * x, label="×2")),
+        Rule(lambda x: True, Op(lambda x: 3 * x, label="×3")),
+    ],
+    None,
+    max_depth=2,
+    max_nodes=None,
+).to_dot().render()

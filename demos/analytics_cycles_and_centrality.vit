@@ -1,0 +1,33 @@
+#!/usr/bin/env viter
+# Pure inspection: use NetworkX to ask questions about a VisIter graph.
+# No rendering — the point is that NetworkX's toolbox is available
+# directly in a .vit file.
+#
+#   (a) How many nodes / edges?
+#   (b) Which cycles exist?
+#   (c) Which nodes are most "central" by in-degree centrality?
+import json
+import networkx as nx
+from visiter.analytics import to_networkx
+
+g = build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
+    Op(lambda x: x + 2, label="+2"),
+    max_depth=None,
+    max_nodes=None,
+)
+
+nxg = to_networkx(g)
+
+print("=== node and edge counts ===")
+print(json.dumps({"nodes": nx.number_of_nodes(nxg),
+                   "edges": nx.number_of_edges(nxg)}, indent=2))
+
+print("\n=== simple cycles ===")
+print(json.dumps(list(nx.simple_cycles(nxg)), indent=2))
+
+print("\n=== top 5 by in-degree centrality ===")
+top5 = sorted(nx.in_degree_centrality(nxg).items(),
+              key=lambda kv: -kv[1])[:5]
+print(json.dumps(top5, indent=2))

@@ -63,10 +63,10 @@ def test_default_fires_only_when_no_rule_matches():
     assert all(e["op"] == "x + 1" for e in g["edges"])
 
 
-def test_max_nodes_raises_by_default():
+def test_max_nodes_raises_when_on_limit_is_raise():
     rules = [Rule(lambda x: True, Op(lambda x: x + 1, label="+1"))]
     with pytest.raises(RuntimeError, match="max_nodes"):
-        build([0], rules=rules, default=None, max_nodes=10)
+        build([0], rules=rules, default=None, max_nodes=10, on_limit="raise")
 
 
 def test_max_nodes_stop_returns_partial():
