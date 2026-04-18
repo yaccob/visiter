@@ -10,6 +10,4 @@ viter(
         Rule(lambda n: n >= 10, Op(lambda n: n - 10, label="10€")),
     ],
     None,
-    max_depth=None,
-    max_nodes=None,
 )

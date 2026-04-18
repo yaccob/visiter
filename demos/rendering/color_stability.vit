@@ -1,0 +1,53 @@
+#!/usr/bin/env viter
+# Op identity (auto-derived from func) is the color-assignment key.
+# This demo shows three stages of evolving a rule set:
+#
+#   (a) Baseline: x // 3 + default x + 2.
+#   (b) Rule appended: x // 5 added. Pre-existing colors stay put.
+#   (c) Rule inserted BEFORE x // 3: palette indices shift — use
+#       op_colors pinning to keep the visual identity stable.
+import os
+
+out_dir = os.path.join(os.path.dirname(__file__), "out")
+os.makedirs(out_dir, exist_ok=True)
+dot_args = dict(anchor=1, radius=10, direction="backward")
+
+# (a) Baseline: x // 3 = blue, x + 2 = orange.
+build(
+    range(1, 30),
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
+).to_dot(**dot_args).render(file=os.path.join(out_dir, "color_stability_baseline.svg"))
+
+# (b) Appended: x // 5 takes the next palette slot.
+build(
+    range(1, 30),
+    [
+        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3)),
+        Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
+    ],
+    Op(lambda x: x + 2),
+).to_dot(**dot_args).render(file=os.path.join(out_dir, "color_stability_appended.svg"))
+
+# (c) Inserted + pinned: x // 5 now BEFORE x // 3, but op_colors
+#     keeps the original color assignments stable.
+build(
+    range(1, 30),
+    [
+        Rule(lambda x: x % 5 == 0, Op(lambda x: x // 5)),
+        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3)),
+    ],
+    Op(lambda x: x + 2),
+).to_dot(
+    op_colors={
+        "x // 3": ("#ccddff", "#6688bb"),
+        "x + 2": ("#ffddcc", "#ddbb99"),
+        "x // 5": ("#cceecc", "#77aa77"),
+    },
+    **dot_args,
+).render(file=os.path.join(out_dir, "color_stability_pinned.svg"))
+
+import sys
+print(f"wrote {out_dir}/color_stability_baseline.svg", file=sys.stderr)
+print(f"wrote {out_dir}/color_stability_appended.svg", file=sys.stderr)
+print(f"wrote {out_dir}/color_stability_pinned.svg", file=sys.stderr)

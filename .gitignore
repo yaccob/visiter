@@ -10,9 +10,8 @@ build/
 .ruff_cache/
 *.swp
 .DS_Store
-demos/out/
 CLAUDE.md
 .claude/settings.local.json
 .reviews/
-
-
+transcripts/
+qa/

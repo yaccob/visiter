@@ -8,6 +8,4 @@ viter(
     [Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
           Op(lambda s: s[:-1], label="drop-vowel"))],
     None,
-    max_depth=None,
-    max_nodes=None,
 )

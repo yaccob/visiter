@@ -97,8 +97,8 @@ Maude, LoLA, and continuous-dynamics tooling:
   every data field, the rendering model in full, design decisions.
 - [docs/comparison.md](docs/comparison.md) — how VisIter relates to
   other tools in the ecosystem, and when to pick something else.
-- [demos/](demos/) — runnable end-to-end examples: `make demo` writes
-  SVG/PDF/DOT into `demos/out/`.
+- [demos/](demos/) — runnable `.vit` examples organized by topic
+  (`basics/`, `rendering/`, `integration/`, `applications/`).
 
 ## License
 

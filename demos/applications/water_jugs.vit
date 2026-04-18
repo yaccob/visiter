@@ -7,8 +7,8 @@
 #   water_jugs_path.svg — only the shortest path(s) to the target
 #
 # Usage:
-#   viter demos/water_jugs.vit                              # default 3L+5L, target 4
-#   viter demos/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
+#   viter demos/applications/water_jugs.vit
+#   viter demos/applications/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
 import argparse
 import os
 import networkx as nx

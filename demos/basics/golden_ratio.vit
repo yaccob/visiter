@@ -5,9 +5,8 @@
 # 1, 2, 3/2, 5/3, 8/5, 13/8, 21/13, 34/21 — Fibonacci-ratio convergents to φ.
 viter(
     [Fraction(1)],
-    [Rule(lambda x: True, Op(lambda x: 1 + 1 / x, label="1 + 1/x"))],
+    [Rule(lambda x: True, Op(lambda x: 1 + 1 / x))],
     None,
     max_depth=7,
-    max_nodes=None,
     key_type="number",
 )

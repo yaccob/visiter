@@ -220,8 +220,9 @@ stub for "other nodes still feed in from outside"):
 
 ![crop, direction=backward](images/crop_backward.svg)
 
-See [`demos/anchor_radius_crop_and_recolor.sh`](../demos/anchor_radius_crop_and_recolor.sh)
-for a script that renders one graph as three different views.
+See [`demos/rendering/cropping.vit`](../demos/rendering/cropping.vit)
+and [`demos/rendering/custom_colors.vit`](../demos/rendering/custom_colors.vit)
+for examples.
 
 ---
 
@@ -274,7 +275,7 @@ the 1-branch, and a cropped-out incoming stub at 2:
 No. Values can be any hashable, `str()`-able Python object: integers,
 strings, tuples, frozensets. The rule and op functions just need to
 agree on the type. See
-[`demos/non_integer_values.sh`](../demos/non_integer_values.sh) for
+[`demos/basics/string_iteration.vit`](../demos/basics/string_iteration.vit) for
 a string-valued example (drop trailing vowels until none remain).
 
 A few `to_dot` features are intrinsically integer-specific —
@@ -313,10 +314,8 @@ Because the stages are decoupled, you can save the JSON once and
 render it many times with different views — or run a schema validator
 between stages as a sanity check.
 
-See [`demos/pipeline_to_svg_and_pdf.sh`](../demos/pipeline_to_svg_and_pdf.sh)
-for the full pipe to PDF, and
-[`demos/schema_validation_in_pipeline.sh`](../demos/schema_validation_in_pipeline.sh)
-for inserting validation into the pipeline.
+See the [demos/](../demos/) for runnable examples covering the full
+pipeline.
 
 ---
 
@@ -338,7 +337,7 @@ is evaluated and its result emitted as JSON. If the expression returns
 a NetworkX graph (e.g. `nx.condensation(graph)`), it flows straight
 back into `visiter to-dot` for rendering. See the
 [manual's NetworkX section](manual.md#7-integrating-with-networkx) and
-the [`analytics_*` demos](../demos/) for more.
+the [`demos/integration/`](../demos/integration/) examples for more.
 
 ## What does the JSON Schema buy me?
 
@@ -368,5 +367,5 @@ pip install visiter[validate]
   data field, the rendering model in full, design decisions.
 - The [demos](../demos/) are runnable end-to-end examples covering
   the patterns introduced above.
-- Run `make demo` to generate every demo's output into `demos/out/`
-  and look at the SVGs.
+- Run `make demo` to regenerate all demo outputs and look at the SVGs
+  in each subdirectory's `out/` folder.

@@ -724,7 +724,7 @@ binds selected attributes. The option is repeatable and available on
 `build`, `to-dot`, and `analyze`.
 
 A runnable end-to-end version of this pipeline lives in
-[`demos/custom_key_type.sh`](../demos/custom_key_type.sh).
+[`demos/basics/golden_ratio.vit`](../demos/basics/golden_ratio.vit).
 
 ---
 
@@ -913,8 +913,8 @@ visiter analyze 'nx.condensation(graph)' \
   | dot -Tsvg > scc.svg
 ```
 
-See [`demos/analytics_condensation_rendered.sh`](../demos/analytics_condensation_rendered.sh)
-for the full end-to-end pipeline.
+See [`demos/integration/condensation.vit`](../demos/integration/condensation.vit)
+for the full end-to-end example.
 
 ### CLI
 
@@ -943,10 +943,8 @@ visiter build '...' \
   | dot -Tsvg > scc.svg
 ```
 
-See [`demos/analytics_cycles_and_centrality.sh`](../demos/analytics_cycles_and_centrality.sh),
-[`demos/analytics_condensation_rendered.sh`](../demos/analytics_condensation_rendered.sh),
-and [`demos/analytics_shortest_paths_highlighted.sh`](../demos/analytics_shortest_paths_highlighted.sh)
-for runnable end-to-end examples.
+See the [`demos/integration/`](../demos/integration/) directory for
+runnable end-to-end examples.
 
 ### Worked example: water jug shortest path
 
@@ -970,7 +968,7 @@ as a standalone image:
 Bold cell values mark the target amount; the darkened node is the
 goal state where the path ends. The full pipeline (build → analyze →
 subgraph → render) is in
-[`demos/water_jugs.sh`](../demos/water_jugs.sh).
+[`demos/applications/water_jugs.vit`](../demos/applications/water_jugs.vit).
 
 ### Scope
 

@@ -10,5 +10,4 @@ build(
     ],
     Op(lambda x: x + 1, label="+1"),
     max_depth=4,
-    max_nodes=None,
 ).to_dot(anchor=1, radius=10, direction="backward").render()

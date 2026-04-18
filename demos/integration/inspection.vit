@@ -12,10 +12,8 @@ from visiter.analytics import to_networkx
 
 g = build(
     range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-    Op(lambda x: x + 2, label="+2"),
-    max_depth=None,
-    max_nodes=None,
+    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
+    Op(lambda x: x + 2),
 )
 
 nxg = to_networkx(g)

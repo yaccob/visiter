@@ -8,7 +8,7 @@ help:
 	@echo "Targets:"
 	@echo "  setup         create venv and install package + dev deps"
 	@echo "  test          run pytest"
-	@echo "  demo          run all demos/*.sh (writes to demos/out/)"
+	@echo "  demo          run all demos/**/*.vit (writes to each out/)"
 	@echo "  docs          regenerate all embedded SVGs in docs/"
 	@echo "  build         build sdist + wheel into dist/"
 	@echo "  check-version verify pyproject version isn't already on PyPI"
@@ -30,11 +30,7 @@ test: setup
 
 demo: setup
 	@command -v dot >/dev/null || { echo "demos require 'dot' (Graphviz) on PATH"; exit 1; }
-	@for s in demos/*.sh; do \
-	    echo "== $$s =="; \
-	    PATH="$(CURDIR)/$(VENV_BIN):$$PATH" bash "$$s" || exit 1; \
-	done
-	@echo "all demos succeeded — see demos/out/"
+	$(VENV_BIN)/python scripts/generate_demo_outputs.py
 
 docs: setup
 	@command -v dot >/dev/null || { echo "docs require 'dot' (Graphviz) on PATH"; exit 1; }
