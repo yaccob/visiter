@@ -29,17 +29,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 - `Graph` class (dict subclass) with `.to_dot()`, `.filter()`, `.tap()`.
 - `Dot` class (graphviz.Digraph wrapper) with `.render()`, `.tap()`.
+- `viter()` convenience function: one-shot `build().to_dot().render()`.
 - `write()` factory function for use with `.tap()`:
   `.tap(write())` (stdout) or `.tap(write(file="g.json"))` (file).
 - `NxFilter` for NetworkX graph transforms in the fluent chain:
   `build(...).filter(NxFilter(nx.condensation)).to_dot().render()`.
 - `__file__` bound in `.vit` exec namespace to the script path.
 - `sys.argv` passthrough for parameterized `.vit` files.
-- New demo `.vit` files replacing most shell-script wrappers.
 
 ### Changed
 - `to_dot()` returns `Dot` wrapper instead of raw `graphviz.Digraph`.
-- Demo scripts converted from `.sh` wrappers to self-contained `.vit` files.
+- Demos restructured into thematic subdirectories (`basics/`,
+  `rendering/`, `integration/`, `applications/`) with generated
+  SVG outputs checked in for browsing without Graphviz.
 
 ---
 
