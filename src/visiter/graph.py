@@ -1,13 +1,13 @@
-"""Graph — dict subclass returned by build(), entry point for the fluent API.
+"""Graph — dict subclass returned by ``Builder.build()``.
 
 The Graph class inherits from dict, so all existing dict-based operations
 (indexing, json.dump, etc.) work unchanged. It adds fluent methods for
 the visiter pipeline:
 
-    build(...)                       → Graph
-      .tap(func)                     → Graph (side effect, returns self)
-      .filter(filter_obj)            → Graph (transform via filter protocol)
-      .to_dot(...)                   → Dot   (convert to Graphviz representation)
+    viter(...).case(...).default(...).build()   → Graph
+      .tap(func)                                → Graph (side effect, returns self)
+      .filter(filter_obj)                       → Graph (transform via filter protocol)
+      .to_dot(...)                              → Dot   (convert to Graphviz representation)
 
 Side effects (saving, logging, inspection) are always wrapped in .tap()
 to make them visually distinct from transformations when reading a chain.
@@ -30,7 +30,9 @@ class Graph(dict):
         Use for saving snapshots, logging, or inspection without
         breaking the chain::
 
-            build(...).tap(write(file="g.json")).to_dot().render()
+            viter(...).case(...).default(...).build() \\
+                .tap(write(file="g.json")) \\
+                .to_dot().render()
         """
         func(self)
         return self
@@ -59,6 +61,8 @@ class Graph(dict):
         ``to_dot()`` function (anchor, radius, direction, op_colors, …).
         Returns a ``Dot`` instance.
         """
+        # Lazy import: to_dot imports Graph for typing, so pulling it in
+        # at the top would cycle.
         from .to_dot import to_dot as _to_dot
         return _to_dot(self, **kwargs)
 
@@ -71,7 +75,8 @@ class Graph(dict):
 
         This is a convenience for use inside ``.tap()``::
 
-            build(...).tap(write(file="g.json"))
+            viter(...).case(...).default(...).build() \\
+                .tap(write(file="g.json"))
 
         But can also be called directly on a Graph instance.
         Returns self for chaining.

@@ -26,22 +26,20 @@ A, B, T = args.cap_a, args.cap_b, args.target
 path_out = args.path_out or os.path.join(os.path.dirname(__file__), "out", "water_jugs_path.svg")
 
 # Build the full reachability graph
-g = build(
-    [(0, 0)],
-    [
-        Rule(lambda s: s[0] < A,  Op(lambda s: (A, s[1]),     label=f"fill {A}L")),
-        Rule(lambda s: s[1] < B,  Op(lambda s: (s[0], B),     label=f"fill {B}L")),
-        Rule(lambda s: s[0] > 0,  Op(lambda s: (0, s[1]),     label=f"empty {A}L")),
-        Rule(lambda s: s[1] > 0,  Op(lambda s: (s[0], 0),     label=f"empty {B}L")),
-        Rule(lambda s: s[0] > 0 and s[1] < B,
-             Op(lambda s: (max(0, s[0]-(B-s[1])), min(B, s[0]+s[1])), label=f"{A}L→{B}L")),
-        Rule(lambda s: s[1] > 0 and s[0] < A,
-             Op(lambda s: (min(A, s[0]+s[1]), max(0, s[1]-(A-s[0]))), label=f"{B}L→{A}L")),
-    ],
-    None,
-    max_depth=None, max_nodes=None,
-    tags={"highlight": lambda s: s[0] == T or s[1] == T},
-)
+g = (viter([(0, 0)],
+           max_depth=None, max_nodes=None,
+           tags={"highlight": lambda s: s[0] == T or s[1] == T})
+     .case(lambda s: s[0] < A, lambda s: (A, s[1]),       label=f"fill {A}L")
+     .case(lambda s: s[1] < B, lambda s: (s[0], B),       label=f"fill {B}L")
+     .case(lambda s: s[0] > 0, lambda s: (0, s[1]),       label=f"empty {A}L")
+     .case(lambda s: s[1] > 0, lambda s: (s[0], 0),       label=f"empty {B}L")
+     .case(lambda s: s[0] > 0 and s[1] < B,
+           lambda s: (max(0, s[0]-(B-s[1])), min(B, s[0]+s[1])),
+           label=f"{A}L→{B}L")
+     .case(lambda s: s[1] > 0 and s[0] < A,
+           lambda s: (min(A, s[0]+s[1]), max(0, s[1]-(A-s[0]))),
+           label=f"{B}L→{A}L")
+     .build())
 
 # Render full graph to stdout
 g.to_dot().render()

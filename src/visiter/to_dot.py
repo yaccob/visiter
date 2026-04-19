@@ -52,7 +52,7 @@ def to_dot(graph, *, op_labels=None,
                  op_colors=None, palette=None,
                  show_binary=False, show_factors=False,
                  node_label=None, node_label_attr=None,
-                 time_limit=None, on_limit="raise"):
+                 time_limit=None, on_limit="stop"):
     """Render a graph dict (from `build`) as a Graphviz Digraph.
 
     Args:
@@ -94,8 +94,9 @@ def to_dot(graph, *, op_labels=None,
             (BFS cropping, build_dot loops, ghost-edge loop). Independent
             from any subprocess-level Graphviz layout timeout the caller
             may apply.
-        on_limit: "raise" (default) → RuntimeError when time_limit hits;
-            "stop" → return the partially-built dot.
+        on_limit: "stop" (default) → return the partially-built dot when
+            time_limit hits. "raise" → RuntimeError instead. Accepts
+            either the string or the corresponding `OnLimit` enum member.
 
     Edges whose source falls outside the rendered set but whose target stays
     get a dashed "ghost" stub as a visual cue that the graph continues.

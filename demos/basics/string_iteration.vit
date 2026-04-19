@@ -1,11 +1,9 @@
 #!/usr/bin/env viter
 # Iteration on strings, not numbers. Rule: if the word ends in a vowel,
 # drop the last character. Default: none — words ending in a consonant
-# are leaves. Demonstrates that build's value type can be any
+# are leaves. Demonstrates that viter's value type can be any
 # hashable, str()-able Python object.
-viter(
-    ["banana", "garage", "queue", "iterator"],
-    [Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
-          Op(lambda s: s[:-1], label="drop-vowel"))],
-    None,
-)
+(viter(["banana", "garage", "queue", "iterator"])
+ .case(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
+       lambda s: s[:-1], label="drop-vowel")
+ .render())

@@ -1,27 +1,34 @@
+"""Iteration-behavior tests via the viter() Builder API.
+
+A handful of tests at the bottom exercise the internal ``Op`` class
+directly (label/id derivation) — these import from ``visiter.iteration``
+(the backing module) to avoid coupling the public API surface to
+implementation details.
+"""
+
 import pytest
 
-from visiter import Op, Rule, build
+from visiter import viter
+from visiter.iteration import Op  # internal: label/id derivation tests
 
 
-def descent_rules():
-    # Rule: divisible-by-3 → divide by 3.
-    return [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))]
+# ---- BFS structure and cycle handling --------------------------------------
 
-
-def descent_default():
-    # Default: add 2 when no rule matches.
-    return Op(lambda x: x + 2, label="+2")
+def descent():
+    return (viter([1])
+            .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+            .default(lambda x: x + 2, label="+2"))
 
 
 def test_basic_descent_forms_cycle():
-    g = build([1], rules=descent_rules(), default=descent_default())
+    g = descent().build()
     # 1 → +2 → 3 → ÷3 → 1 forms a cycle; expect those two nodes.
     assert set(g["nodes"].keys()) == {"1", "3"}
     assert {(e["from"], e["to"]) for e in g["edges"]} == {("1", "3"), ("3", "1")}
 
 
-def test_op_order_follows_rule_declaration():
-    g = build([1], rules=descent_rules(), default=descent_default())
+def test_op_order_follows_case_declaration():
+    g = descent().build()
     # Identity is auto-derived from func, not from the display label,
     # so op_order keys are the lambda bodies' unparsed form — labels
     # live in graph["op_labels"].
@@ -30,66 +37,74 @@ def test_op_order_follows_rule_declaration():
 
 
 def test_depth_is_bfs_minimum():
-    g = build([1], rules=descent_rules(), default=descent_default())
-    # 1 is start (depth 0); 3 reached in one step.
+    g = descent().build()
     assert g["nodes"]["1"]["depth"] == 0
     assert g["nodes"]["3"]["depth"] == 1
 
 
 def test_max_depth_caps_expansion_and_emits_pseudo_edges():
-    g = build([1], rules=descent_rules(), default=descent_default(),
-                max_depth=1)
+    g = (viter([1], max_depth=1)
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(lambda x: x + 2, label="+2")
+         .build())
     # Only 1 (depth 0) and 3 (depth 1) should be present.
     assert set(g["nodes"].keys()) == {"1", "3"}
-    # 3 is at max_depth; its rule (x%3==0 → x // 3) would fire → pseudo.
+    # 3 is at max_depth; its case (x%3==0 → x // 3) would fire → pseudo.
     assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {("3", "x // 3")}
 
 
-def test_rule_bound_emits_pseudo_edges_not_real_ones():
-    # Doubling rule, bounded at 8.
-    rules = [Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
-                  bound=lambda x: 2 * x <= 8)]
-    g = build([1], rules=rules, default=None)
+def test_case_bound_emits_pseudo_edges_not_real_ones():
+    # Doubling case, bounded at 8.
+    g = (viter([1])
+         .case(lambda x: True, lambda x: 2 * x,
+               label="×2", bound=lambda x: 2 * x <= 8)
+         .build())
     # Real edges: 1→2, 2→4, 4→8. Pseudo: 8 (would go to 16 but blocked).
     assert {(e["from"], e["to"]) for e in g["edges"]} == {("1", "2"), ("2", "4"), ("4", "8")}
     assert {(pe["from"], pe["op"]) for pe in g["pseudo_edges"]} == {("8", "2 * x")}
 
 
-def test_default_fires_only_when_no_rule_matches():
-    rules = [Rule(lambda x: x > 100, Op(lambda x: x // 2, label="halve"))]
-    g = build([5], rules=rules, default=Op(lambda x: x + 1, label="+1"),
-                max_nodes=20, on_limit="stop")
+def test_default_fires_only_when_no_case_matches():
+    g = (viter([5], max_nodes=20)
+         .case(lambda x: x > 100, lambda x: x // 2, label="halve")
+         .default(lambda x: x + 1, label="+1")
+         .build())
     # 5 < 100, so default fires; +1 goes 5→6→7→… until max_nodes.
     assert all(e["op"] == "x + 1" for e in g["edges"])
 
 
 def test_max_nodes_raises_when_on_limit_is_raise():
-    rules = [Rule(lambda x: True, Op(lambda x: x + 1, label="+1"))]
     with pytest.raises(RuntimeError, match="max_nodes"):
-        build([0], rules=rules, default=None, max_nodes=10, on_limit="raise")
+        (viter([0], max_nodes=10, on_limit="raise")
+         .case(lambda x: True, lambda x: x + 1, label="+1")
+         .build())
 
 
 def test_max_nodes_stop_returns_partial():
-    rules = [Rule(lambda x: True, Op(lambda x: x + 1, label="+1"))]
-    g = build([0], rules=rules, default=None, max_nodes=10, on_limit="stop")
+    g = (viter([0], max_nodes=10, on_limit="stop")
+         .case(lambda x: True, lambda x: x + 1, label="+1")
+         .build())
     assert len(g["nodes"]) == 10
 
 
-def test_default_is_required():
-    # default has no Python default value — omitting it raises TypeError.
-    with pytest.raises(TypeError):
-        build([1], rules=descent_rules())
-
-
-def test_default_accepted_positionally():
-    # default= can now be passed as the third positional argument.
-    g = build([1], descent_rules(), descent_default())
-    assert set(g["nodes"].keys()) == {"1", "3"}
+def test_multiple_cases_fan_out():
+    # Both cases can match for the same x → multiple outgoing edges.
+    g = (viter([6])
+         .case(lambda x: x < 100, lambda x: 2 * x, label="×2",
+               bound=lambda x: 2 * x < 100)
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .build())
+    # 6 matches both cases → edges 6→12 and 6→2.
+    out_from_6 = {(e["from"], e["to"]) for e in g["edges"] if e["from"] == "6"}
+    assert ("6", "12") in out_from_6
+    assert ("6", "2") in out_from_6
 
 
 def test_tags_recorded_when_predicate_matches():
-    g = build([1, 2, 3], rules=descent_rules(), default=descent_default(),
-                tags={"even": lambda x: x % 2 == 0})
+    g = (viter([1, 2, 3], tags={"even": lambda x: x % 2 == 0})
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(lambda x: x + 2, label="+2")
+         .build())
     # From 2: 2 → 4 → 6 → 2 cycle; even applies to 2, 4, 6.
     assert "even" in g["nodes"]["2"].get("tags", [])
     assert "even" in g["nodes"]["4"].get("tags", [])
@@ -98,19 +113,7 @@ def test_tags_recorded_when_predicate_matches():
     assert "even" not in g["nodes"]["3"].get("tags", [])
 
 
-def test_multiple_rules_fan_out():
-    # Rules can both match for the same x → multiple outgoing edges.
-    rules = [
-        Rule(lambda x: x < 100, Op(lambda x: 2 * x, label="×2"),
-             bound=lambda x: 2 * x < 100),
-        Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3")),
-    ]
-    g = build([6], rules=rules, default=None)
-    # 6 matches both rules → edges 6→12 and 6→2.
-    out_from_6 = {(e["from"], e["to"]) for e in g["edges"] if e["from"] == "6"}
-    assert ("6", "12") in out_from_6
-    assert ("6", "2") in out_from_6
-
+# ---- label/id derivation and op-identity surface --------------------------
 
 def test_op_label_defaults_to_function_name():
     def square(x):
@@ -126,20 +129,10 @@ def test_op_label_defaults_to_lambda_body():
 def test_op_label_explicit_still_wins():
     op = Op(lambda x: x * 2, label="double")
     assert op.label == "double"
-    op_kw = Op(lambda x: x * 2, label="double")
-    assert op_kw.label == "double"
-
-
-def test_op_label_derivation_drives_build():
-    # A rule built with auto-labeled ops must still populate op_order
-    # correctly (labels go through the same code path as explicit ones).
-    rules = [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))]
-    g = build([9], rules=rules, default=Op(lambda x: x + 2))
-    assert g["op_order"] == ["x // 3", "x + 2"]
 
 
 def test_op_label_disambiguates_lambdas_on_same_line():
-    # The common idiom Rule(lambda x: cond, Op(lambda x: body)) has two
+    # The common idiom `.case(lambda x: cond, lambda x: body)` has two
     # lambdas on one source line; each Op must still pick its own body.
     a, b = Op(lambda x: x + 1), Op(lambda x: x - 1)
     assert a.label == "x + 1"
@@ -177,10 +170,11 @@ def test_op_explicit_id_separates_display_from_key():
 
 
 def test_build_populates_op_labels_map():
-    rules = [Rule(lambda x: x % 3 == 0,
-                  Op(lambda x: x // 3, label="÷3", id="div3"))]
-    g = build([9], rules=rules,
-                default=Op(lambda x: x + 2, label="+2", id="inc2"))
+    g = (viter([9])
+         .case(lambda x: x % 3 == 0, lambda x: x // 3,
+               label="÷3", id="div3")
+         .default(lambda x: x + 2, label="+2", id="inc2")
+         .build())
     assert g["op_order"] == ["div3", "inc2"]
     assert g["op_labels"] == {"div3": "÷3", "inc2": "+2"}
     ops_on_edges = {e["op"] for e in g["edges"]}
@@ -189,20 +183,21 @@ def test_build_populates_op_labels_map():
 
 def test_build_warns_on_id_collision_with_different_funcs():
     import warnings
-    rules = [
-        Rule(lambda x: x > 0, Op(lambda x: x - 1, id="shared")),
-        Rule(lambda x: x < 0, Op(lambda x: x + 1, id="shared")),
-    ]
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        build([1], rules=rules, default=None)
+        (viter([1])
+         .case(lambda x: x > 0, lambda x: x - 1, id="shared")
+         .case(lambda x: x < 0, lambda x: x + 1, id="shared")
+         .build())
     assert any("id collision" in str(w.message) for w in caught)
 
 
+# ---- key_type surface ------------------------------------------------------
+
 def test_key_type_string_forces_type_for_all_nodes():
-    # Integer seeds, but the user asserts these should be treated as
+    # Integer seeds, but the caller asserts these should be treated as
     # "number" — e.g. because domain semantics are rational, not integral.
-    g = build([1, 2, 3], rules=[], default=None, key_type="number")
+    g = viter([1, 2, 3], key_type="number").build()
     for info in g["nodes"].values():
         assert info["key_type"] == "number"
 
@@ -210,17 +205,13 @@ def test_key_type_string_forces_type_for_all_nodes():
 def test_key_type_string_rejects_invalid_json_primitive():
     # "int" is a Python type name, not a JSON Schema primitive.
     with pytest.raises(ValueError, match="key_type"):
-        build([1], rules=[], default=None, key_type="int")
+        viter([1], key_type="int").build()
 
 
 def test_key_type_callable_classifies_by_value():
-    # Callable returns the JSON Schema primitive per value.
     from fractions import Fraction
-    g = build(
-        [Fraction(1, 2), Fraction(3, 4)],
-        rules=[], default=None,
-        key_type=lambda v: "number",
-    )
+    g = viter([Fraction(1, 2), Fraction(3, 4)],
+              key_type=lambda v: "number").build()
     for info in g["nodes"].values():
         assert info["key_type"] == "number"
 
@@ -228,35 +219,31 @@ def test_key_type_callable_classifies_by_value():
 def test_key_type_callable_none_falls_back_to_json_type():
     # Returning None for some values mixes in the default json_type logic
     # per value — here strings stay "string", ints become "number".
-    g = build(
-        [1, "a"], rules=[], default=None,
-        key_type=lambda v: "number" if isinstance(v, int) else None,
-    )
+    g = viter([1, "a"],
+              key_type=lambda v: "number" if isinstance(v, int) else None).build()
     assert g["nodes"]["1"]["key_type"] == "number"
     assert g["nodes"]["a"]["key_type"] == "string"
 
 
 def test_key_type_callable_invalid_return_raises():
-    # Callable that returns a non-primitive must fail fast when the
-    # resolver is first invoked (seed processing).
     with pytest.raises(ValueError, match="key_type"):
-        build([1], rules=[], default=None, key_type=lambda v: "int")
+        viter([1], key_type=lambda v: "int").build()
 
 
 def test_key_type_rejects_wrong_type():
-    # Anything other than None / str / callable is a TypeError.
     with pytest.raises(TypeError, match="key_type"):
-        build([1], rules=[], default=None, key_type=42)
+        viter([1], key_type=42).build()
 
 
 def test_build_no_warning_when_id_matches_same_op_reused():
+    # Two cases that share the same id= value should not warn as long
+    # as they're the exact same callable.
     import warnings
-    shared = Op(lambda x: x - 1, id="dec")
-    rules = [
-        Rule(lambda x: x > 0, shared),
-        Rule(lambda x: x > 1, shared),  # same Op object, same func → no warning
-    ]
+    shared = lambda x: x - 1  # noqa: E731
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        build([3], rules=rules, default=None)
+        (viter([3])
+         .case(lambda x: x > 0, shared, id="dec")
+         .case(lambda x: x > 1, shared, id="dec")
+         .build())
     assert not any("id collision" in str(w.message) for w in caught)

@@ -5,6 +5,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.12.0] — 2026-04-19
+
+### Breaking
+- **`viter()` is now the primary entry**, returning an immutable
+  `Builder` instead of rendering directly. Chain cases via `.case()` /
+  `.cases()`, optionally a `.default()`, then terminate with `.build()`
+  (returns Graph) or `.render()` (shortcut for
+  `build().to_dot().render()`).
+- **`Rule`, `Op`, `build` removed from the public API** (`from visiter
+  import ...`). The explicit `build(start, rules, default)` call is
+  replaced by the Builder chain; `Rule`/`Op` wrapping is gone in favor
+  of direct `condition, fn` pairs in `.case(cond, fn, label=..., id=...,
+  bound=..., exclusive=...)`. The same helpers remain available
+  internally via `visiter.iteration` for tests.
+- **`on_limit` default in `to_dot()`** changed from `"raise"` to
+  `"stop"`, matching `build()`. Callers relying on the old default
+  must now pass `on_limit="raise"` (or `OnLimit.RAISE`) explicitly.
+- **CLI namespace changes**: `.vit` files no longer see `Rule`, `Op`,
+  or `build` pre-bound. The new names `viter`, `Match`, `OnLimit` take
+  their place.
+
+### Added
+- `Match.ALL` / `Match.FIRST` — enum selecting whether every matching
+  case fires (additive fan-out) or only the first (if-elif-else
+  semantics). Per-case override via `.case(..., exclusive=True|False)`.
+- `OnLimit.STOP` / `OnLimit.RAISE` — enum form of the limit-policy
+  option (still accepts raw strings for backward ergonomics).
+- `.cases(iterable)` helper on the Builder for bulk rule registration,
+  accepting `(cond, fn)` tuples or `(cond, fn, kwargs)` triples.
+- Strict error when `.default()` is called twice on the same Builder.
+
+### Changed
+- All 14 `.vit` demos migrated to the fluent Builder API.
+- `tictactoe.py` helper exposes `make_cases()` returning tuples instead
+  of `make_rules()` returning `Rule` objects.
+- `Rule` namedtuple extended with an `exclusive` field (default
+  `False`); `build()`'s main loop short-circuits after a matched
+  exclusive rule.
+
+---
+
 ## [0.11.0] — 2026-04-18
 
 ### Breaking
@@ -191,6 +232,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Value-neutral iteration (not limited to integers).
 - JSON Schema for the graph dict (`schemas/v1/graph.schema.json`).
 
+[0.12.0]: https://github.com/yaccob/visiter/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/yaccob/visiter/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/yaccob/visiter/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/yaccob/visiter/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/yaccob/visiter/compare/v0.8.0...v0.8.1

@@ -2,7 +2,9 @@
 
 Filters transform a Graph in the chain::
 
-    build(...).filter(NxFilter(nx.condensation)).to_dot().render()
+    viter(...).case(...).default(...).build() \\
+        .filter(NxFilter(nx.condensation)) \\
+        .to_dot().render()
 
 A filter is a callable that accepts a Graph (dict subclass) and returns
 a Graph (or a plain dict, which Graph.filter() wraps automatically).
@@ -20,10 +22,12 @@ class NxFilter:
     a ``nx.DiGraph``.  Handles the VisIter ↔ NetworkX conversion
     internally::
 
-        from visiter.filters import NxFilter
+        from visiter import NxFilter
         import networkx as nx
 
-        build(...).filter(NxFilter(nx.condensation)).to_dot().render()
+        viter(...).case(...).default(...).build() \\
+            .filter(NxFilter(nx.condensation)) \\
+            .to_dot().render()
 
     The filter uses ``visiter.analytics.to_networkx`` and
     ``from_networkx`` for the round-trip.

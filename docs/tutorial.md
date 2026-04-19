@@ -4,11 +4,10 @@
 >
 > ```python
 > #!/usr/bin/env viter
-> viter(
->     [1],
->     [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
->     Op(lambda x: x + 2),
-> )
+> (viter([1])
+>  .case(lambda x: x % 3 == 0, lambda x: x // 3)
+>  .default(lambda x: x + 2)
+>  .render())
 > ```
 >
 > Save as `first.vit`, run with `viter first.vit > out.svg`.
@@ -40,15 +39,20 @@ actually want is a graph: nodes are reachable values, edges are
 applied operations. Then you can read off cycles, branches, and
 attractors at a glance.
 
-VisIter does exactly that, in two stages:
+VisIter does exactly that, through a fluent pipeline:
 
-1. **`build`** runs your rules from one or more starting values and
-   returns a graph data structure (just a dict).
-2. **`to_dot`** turns that graph into a Graphviz drawing.
+1. **`viter(iterable)`** starts a builder you configure with
+   `.case(...)` and optionally `.default(...)`.
+2. **`.build()`** runs the rules from your starting values and returns
+   a `Graph` (a dict subclass) — or use **`.render()`** as a
+   one-shot shortcut that builds, converts to DOT, and renders.
+3. The `Graph` itself supports further chaining: `.to_dot(...)` for
+   cropping/coloring options, `.filter(...)` for graph transforms
+   (e.g. NetworkX bridges), `.tap(...)` for side-effects like JSON
+   snapshots.
 
-The two stages are independent. You can use one without the other —
-build a graph and analyze it programmatically, or render someone
-else's graph dict.
+The stages are independent. You can build a graph and analyze it
+programmatically, or render someone else's graph dict.
 
 ---
 
@@ -59,15 +63,14 @@ Otherwise, add 2.
 
 ```python
 #!/usr/bin/env viter
-viter(
-    [1],
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-)
+(viter([1])
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .render())
 ```
 
-Read it back: from 1 the rule doesn't apply (1 isn't divisible by 3),
-so the default fires and we get 3. From 3 the rule fires, dividing
+Read it back: from 1 the case doesn't apply (1 isn't divisible by 3),
+so the default fires and we get 3. From 3 the case fires, dividing
 back to 1. There's the cycle — and the rendered graph shows two nodes
 and two arrows that prove it.
 
@@ -78,16 +81,17 @@ and two arrows that prove it.
 ## How are edge labels chosen?
 
 Notice the edges above read `x // 3` and `x + 2` — no labels were
-passed. `Op(func)` derives a label from its callable: the function's
-`__name__` for named functions, or the lambda body rendered via
-`ast.unparse` for lambdas. That covers most cases with no typing.
+passed. `.case()` and `.default()` derive a label from their callable:
+the function's `__name__` for named functions, or the lambda body
+rendered via `ast.unparse` for lambdas. That covers most cases with no
+typing.
 
 When you want something shorter, nicer, or non-ASCII, pass `label=`
-explicitly (it's keyword-only — only `func` is positional):
+explicitly:
 
 ```python
-Op(lambda x: x // 3, label="÷3")
-Op(lambda x: x + 2, label="+2")
+.case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+.default(lambda x: x + 2, label="+2")
 ```
 
 ![same graph, custom labels](images/custom_labels.svg)
@@ -97,42 +101,62 @@ identify the callable — `functools.partial`, REPL lambdas built from
 an unreachable source, or several lambdas on one line that differ
 only by whitespace.
 
-`Op` also carries a separate **`id`** field — the stable key used by
+Cases also carry a separate **`id=`** field — the stable key used by
 color pinning (`op_colors`) and by `op_order`. By default it's the
-**auto-derived form of `func`** (the same string `_derive_label`
-produces), *not* the user-chosen display label. That means two ops
+**auto-derived form of the function** (the same string `_derive_label`
+produces), *not* the user-chosen display label. That means two cases
 built from the same function share an id even when their display
 labels differ, and pins you set via `op_colors` don't break when you
 later rename a label. Set `id=` explicitly when you want a stable,
-short key for pinning — the `Op` section of the manual has the
-details.
+short key for pinning.
 
 ---
 
-## What happens when no rule applies?
+## What happens when no case applies?
 
-You answer that explicitly when you call `build`, with the `default`
-keyword:
+That's what `.default()` answers:
 
-- `default=Op(...)` — apply this operation when nothing else fires.
-  Useful when "everything not covered by my rules takes this other
-  path" describes your iteration honestly.
-- `default=None` — declare the value a leaf. The graph just stops
-  there.
+- `.default(fn)` — apply `fn` when nothing else fires. Useful when
+  "everything not covered by my cases takes this other path" describes
+  your iteration honestly.
+- Omit `.default()` entirely (or call `.default()` with no argument) —
+  declare the value a leaf. The graph just stops there.
 
-`default` has no Python default value on purpose. You're forced to
-make the choice, because "no rule matched" is not the same question as
-"my rules said to stop here" — VisIter wants you to spell that out.
+With `.default(lambda x: x + 1)`, the value whose case didn't match
+still gets a successor:
 
-With `default=Op(x+1)`, the value whose rule didn't match still gets
-a successor:
+![default op fires](images/default_op.svg)
 
-![default Op fires](images/default_op.svg)
-
-With `default=None`, the same value is a leaf — drawn white, because
+Without a default, the same value is a leaf — drawn white, because
 it has no outgoing edge:
 
-![default None: leaf](images/default_none.svg)
+![no default: leaf](images/default_none.svg)
+
+---
+
+## When do multiple cases all fire? When does only the first?
+
+By default, **every case whose condition matches fires** — that's how
+you get multi-edge fan-out and the characteristic wedge-pie fills for
+nodes with more than one applicable op. If both `x % 2 == 0` and
+`x % 3 == 0` apply, both edges are produced.
+
+When you want if-elif-else semantics (only the first matching case
+fires), pass `match=Match.FIRST` to `viter(...)`:
+
+```python
+(viter(range(1, 17), match=Match.FIRST)
+ .case(lambda x: x % 2 == 0, lambda x: x // 2)
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x * 5 + 7)
+ .render())
+```
+
+For fine-grained control, each `.case()` can be marked individually
+with `exclusive=True` — the match short-circuits after a matched
+exclusive case. That lets you mix additive and exclusive cases in the
+same chain; later, non-exclusive cases that a previous exclusive case
+short-circuited past simply don't run.
 
 ---
 
@@ -140,20 +164,20 @@ it has no outgoing edge:
 
 Three orthogonal mechanisms, used in combination as needed:
 
-- **`Rule.bound`** — *"this op IS applicable, but stop here anyway"*.
-  The next quickstart uses it: doubling is always meaningful, but
-  bound caps the value at a ceiling.
+- **`.case(..., bound=pred)`** — *"this op IS applicable, but stop here
+  anyway"*. The next example uses it: doubling is always meaningful,
+  but `bound` caps the value at a ceiling.
 - **`max_depth`** — soft cap on BFS depth. Nodes at the limit are
   kept, just not expanded.
 - **`max_nodes`** / **`time_limit`** — hard resource limits. Default
-  behaviour is to stop and emit a warning; pass `on_limit="raise"`
-  to get an exception instead. Defaults: `max_nodes=1024`,
-  `max_depth=64`; pass `None` to disable.
+  behavior is to stop and emit a warning; pass `on_limit=OnLimit.RAISE`
+  (or the string `"raise"`) to get an exception instead. Defaults:
+  `max_nodes=1024`, `max_depth=64`; pass `None` to disable.
 
-`Rule.bound` and `max_depth` produce **pseudo-edges** — entries that
-record "an op would have fired here". The renderer turns them into
-dashed ghost stubs at the boundary, so you can tell the difference
-between "the iteration genuinely terminates here" (no ghost) and "the
+`bound` and `max_depth` produce **pseudo-edges** — entries that record
+"an op would have fired here". The renderer turns them into dashed
+ghost stubs at the boundary, so you can tell the difference between
+"the iteration genuinely terminates here" (no ghost) and "the
 iteration continues, we just stopped looking" (ghost).
 
 Doubling from 1 with `bound=lambda x: 2*x <= 8` stops the BFS at 8 —
@@ -175,7 +199,7 @@ That's exactly what makes graphs from VisIter useful: cycles, joins,
 and shared subpaths show up as actual graph topology, not as
 mysteriously duplicated subtrees.
 
-Starting from `[1, 9]` with the same divide-by-3-else-+2 rule, 3 is
+Starting from `[1, 9]` with the same divide-by-3-else-+2 chain, 3 is
 reached once from 1 (via +2) and once from 9 (via ÷3) — a single
 node with two incoming edges, not a duplicate:
 
@@ -185,11 +209,16 @@ node with two incoming edges, not a duplicate:
 
 ## How do I show only a slice of a big graph?
 
-Render-time cropping. `to_dot` takes `anchor` (a node value) plus
+Render-time cropping. `.to_dot()` takes `anchor` (a node value) plus
 `radius` (BFS hop count) and an optional `direction`:
 
 ```python
-to_dot(graph, anchor=1, radius=2, direction="backward")
+(viter(range(1, 30))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .to_dot(anchor=1, radius=2, direction="backward")
+ .render())
 ```
 
 This says: keep nodes within 2 hops of node 1, walking edges
@@ -229,7 +258,7 @@ The renderer uses a small visual vocabulary so the picture itself
 carries semantic information:
 
 - **Bold border** (`penwidth="3"`) — this node is a *root*: one of the
-  seed values you passed to `build`.
+  seed values you passed to `viter(...)`.
 - **No fill (white)** — leaf: zero outgoing edges. The iteration
   terminates here naturally.
 - **Solid fill** — node has exactly one outgoing op label; the fill
@@ -237,7 +266,7 @@ carries semantic information:
 - **Wedged-pie fill** — node has two or more distinct outgoing op
   labels; the slices are colored after each op (one slice per op).
 - **Darkened fill + white font** — the node carries the `"highlight"`
-  tag (set by a predicate you passed to `build`'s `tags` argument).
+  tag (set by a predicate you passed to `viter(...)`'s `tags` argument).
 
 So at a glance: bold border = where you started; white = where you
 stopped naturally; multi-color pie = where the iteration branches;
@@ -251,7 +280,7 @@ One graph exhibiting every style:
 
 Three different things, all rendered identically:
 
-1. The iteration **could continue** but `Rule.bound` said no.
+1. The iteration **could continue** but a case's `bound=` said no.
 2. The iteration **could continue** but `max_depth` was reached.
 3. The renderer **cropped** the view (anchor/radius or value_range)
    and an edge crossed the boundary.
@@ -270,15 +299,15 @@ the 1-branch, and a cropped-out incoming stub at 2:
 ## Does this only work for numbers?
 
 No. Values can be any hashable, `str()`-able Python object: integers,
-strings, tuples, frozensets. The rule and op functions just need to
-agree on the type. See
+strings, tuples, frozensets. The condition and op functions just need
+to agree on the type. See
 [`demos/basics/string_iteration.vit`](../demos/basics/string_iteration.vit) for
 a string-valued example (drop trailing vowels until none remain).
 
 A few `to_dot` features are intrinsically integer-specific —
-`show_binary`, `show_factors`, and `value_range`. If
-you turn them on for a non-integer graph, they emit a warning and are
-silently skipped; everything else still renders normally.
+`show_binary`, `show_factors`, and `value_range`. If you turn them on
+for a non-integer graph, they emit a warning and are silently skipped;
+everything else still renders normally.
 
 Iterating on words, dropping each trailing vowel until the last
 character is a consonant — string nodes, integer-free graph:
@@ -290,28 +319,33 @@ character is a consonant — string nodes, integer-free graph:
 ## What does the command line look like?
 
 A `.vit` file is a Python script using the fluent API. The `viter`
-command executes it with `Op`, `Rule`, `build`, `to_dot`, `viter`,
-`write`, `NxFilter`, `Graph`, `Fraction`, and `Decimal` pre-bound:
+command executes it with `viter`, `Match`, `OnLimit`, `to_dot`,
+`Graph`, `write`, `NxFilter`, `Fraction`, and `Decimal` pre-bound —
+no imports needed for the common case:
 
 ```python
 #!/usr/bin/env viter
-build(
-    range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-).to_dot(anchor=1, radius=8, direction="backward").render()
+(viter(range(1, 30))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .to_dot(anchor=1, radius=8, direction="backward")
+ .render())
 ```
 
 ```bash
 viter descent.vit > out.svg
 ```
 
-For the simplest case — build + render with defaults — the `viter()`
-shortcut does it in one call:
+For the simplest case — build + render with defaults — the
+builder's `.render()` method does it in one call:
 
 ```python
 #!/usr/bin/env viter
-viter(range(1, 10), [Rule(...)], Op(...))
+(viter(range(1, 10))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .render())
 ```
 
 `.vit` files can use `argparse` for parametrization — all arguments
@@ -343,11 +377,13 @@ Use `NxFilter` to plug a NetworkX transform into the fluent chain:
 #!/usr/bin/env viter
 import networkx as nx
 
-build(
-    range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-).filter(NxFilter(nx.condensation)).to_dot().render()
+(viter(range(1, 30))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .filter(NxFilter(nx.condensation))
+ .to_dot()
+ .render())
 ```
 
 For ad-hoc inspection, use NetworkX directly in the `.vit` file:
@@ -369,7 +405,7 @@ The graph-dict shape is formally specified as a JSON Schema (Draft
 
 That gives you three things:
 
-- A machine-readable contract for tools that consume `build` output.
+- A machine-readable contract for tools that consume builder output.
 - A pipeline checkpoint: validate graph dicts programmatically via
   `jsonschema`.
 - A versioning anchor: future breaking changes ship under `/v2/`,

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from visiter import Op, Rule, build
+from visiter import viter
 
 pytest.importorskip("networkx")
 import networkx as nx  # noqa: E402
@@ -13,11 +13,10 @@ from visiter.analytics import to_networkx, from_networkx  # noqa: E402
 
 
 def sample_graph():
-    return build(
-        start=range(1, 10),
-        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        default=Op(lambda x: x + 2, label="+2"),
-    )
+    return (viter(range(1, 10))
+            .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+            .default(lambda x: x + 2, label="+2")
+            .build())
 
 
 # ---- to_networkx ------------------------------------------------------------
@@ -176,10 +175,9 @@ def test_from_networkx_preserves_key_type_over_inference():
 
 
 def test_roundtrip_preserves_key_type():
-    vg = build(start=["hi"],
-                 rules=[Rule(lambda s: len(s) > 0,
-                             Op(lambda s: s[:-1], label="chop"))],
-                 default=None, max_nodes=5, on_limit="stop")
+    vg = (viter(["hi"], max_nodes=5)
+          .case(lambda s: len(s) > 0, lambda s: s[:-1], label="chop")
+          .build())
     assert all(info["key_type"] == "string" for info in vg["nodes"].values())
 
     round_tripped = from_networkx(to_networkx(vg))

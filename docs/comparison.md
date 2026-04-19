@@ -9,15 +9,18 @@ paragraph at the end — when **not** to use VisIter.
 ## What VisIter actually does
 
 To save you scrolling: VisIter takes a starting value (or several), a
-list of guard-and-operation rules, and an optional default. It runs a
-BFS from the starts, applies whichever rule(s) match at each node,
-records edges and per-node depth, emits pseudo-edges where `Rule.bound`
-or `max_depth` suppressed expansion. A second stage (`to_dot`) turns
-the resulting graph dict into a Graphviz drawing with cropping,
-coloring, wedged-pie fills for branching nodes, and dashed "ghost
-stubs" at every cut boundary. The graph dict has a published JSON
-Schema. The `viter` CLI executes `.vit` files — self-contained Python
-scripts that use the fluent API (`build(...).to_dot().render()`).
+set of guard-and-operation cases (with an optional default), and
+assembles them through a fluent Builder API — `viter(iterable).case(...)
+.default(...).build()`. It runs a BFS from the starts, applies
+whichever case(s) match at each node (additively by default, or
+first-match-wins with `match=Match.FIRST`), records edges and per-node
+depth, and emits pseudo-edges where a case's `bound` or `max_depth`
+suppressed expansion. A second stage (`to_dot`) turns the resulting
+graph dict into a Graphviz drawing with cropping, coloring, wedged-pie
+fills for branching nodes, and dashed "ghost stubs" at every cut
+boundary. The graph dict has a published JSON Schema. The `viter` CLI
+executes `.vit` files — self-contained Python scripts that use the
+same fluent API (`viter(...).case(...).default(...).render()`).
 
 In one phrase: **orbit graphs for discrete iterations under guarded
 rules**, with free/scriptable/Graphviz-native rendering.
@@ -41,11 +44,11 @@ below).
 
 What VisIter has that `NestGraph` doesn't:
 
-- First-class guard-and-operation rule pairs (you can model this in
+- First-class guard-and-operation case pairs (you can model this in
   `NestGraph` by making `f` a dispatch function, but there's no built-
   in notion of "this op applies here, that op doesn't").
 - Pseudo-edges and ghost stubs as a distinct visual primitive for
-  structural cutoffs (`Rule.bound`, `max_depth`, render-time crop).
+  structural cutoffs (case `bound=`, `max_depth`, render-time crop).
 - Op-label-driven stable palette (two invocations of the same rules
   produce the same colors).
 - Wedged-pie multi-op node fills for branching nodes.

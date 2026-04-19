@@ -5,13 +5,8 @@
 # Every path from 10 to 0 is a possible game sequence.
 # Highlighted: multiples of 4 (0, 4, 8) — the winning positions.
 # Leave your opponent there and you can always win.
-viter(
-    10,
-    [
-        Rule(lambda n: n >= 1, Op(lambda n: n - 1, label="take 1")),
-        Rule(lambda n: n >= 2, Op(lambda n: n - 2, label="take 2")),
-        Rule(lambda n: n >= 3, Op(lambda n: n - 3, label="take 3")),
-    ],
-    None,
-    tags={"highlight": lambda n: n % 4 == 0},
-)
+(viter(10, tags={"highlight": lambda n: n % 4 == 0})
+ .case(lambda n: n >= 1, lambda n: n - 1, label="take 1")
+ .case(lambda n: n >= 2, lambda n: n - 2, label="take 2")
+ .case(lambda n: n >= 3, lambda n: n - 3, label="take 3")
+ .render())

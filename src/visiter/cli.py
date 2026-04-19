@@ -2,8 +2,9 @@
 
 A .vit file is a Python script that uses the visiter fluent API
 to build, transform, and render iteration graphs.  The CLI provides
-a pre-populated namespace (Op, Rule, build, to_dot, etc.) and
-executes the file via ``exec``.
+a pre-populated namespace (``viter``, ``Match``, ``OnLimit``,
+``to_dot``, ``Graph``, ``NxFilter``, ``write``, ``Fraction``,
+``Decimal``) and executes the file via ``exec``.
 
 Usage::
 
@@ -32,20 +33,19 @@ def _build_namespace(vit_path):
     from decimal import Decimal
     from fractions import Fraction
 
+    from .builder import Match, OnLimit, viter
     from .filters import NxFilter
     from .graph import Graph
     from .io import write
-    from .iteration import Op, Rule, build, viter as viter_func
     from .to_dot import to_dot
 
     return {
         "__file__": str(Path(vit_path).resolve()),
         "__name__": "__main__",
         # Core API
-        "Op": Op,
-        "Rule": Rule,
-        "build": build,
-        "viter": viter_func,
+        "viter": viter,
+        "Match": Match,
+        "OnLimit": OnLimit,
         "to_dot": to_dot,
         "Graph": Graph,
         # Filters
@@ -61,7 +61,8 @@ def _build_namespace(vit_path):
 def _read_vit(path):
     """Read a .vit file and return (source, resolved_path).
 
-    Strips shebang lines (``#!``) so they don't interfere with exec.
+    A leading ``#!`` shebang is left intact — Python's parser treats it
+    as a comment, so no special handling is needed.
     """
     p = Path(path)
     if not p.exists():

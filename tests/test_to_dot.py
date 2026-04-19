@@ -1,13 +1,12 @@
-from visiter import Op, Rule, build, to_dot
+from visiter import viter, to_dot
 from visiter.render_helpers import resolve_op_colors
 
 
 def make_descent_graph():
-    return build(
-        range(1, 28),
-        rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        default=Op(lambda x: x + 2, label="+2"),
-    )
+    return (viter(range(1, 28))
+            .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+            .default(lambda x: x + 2, label="+2")
+            .build())
 
 
 def test_default_palette_assigns_blue_to_first_rule():
@@ -40,10 +39,9 @@ def test_op_colors_override_palette():
 def test_to_dot_uses_op_labels_for_display_when_id_differs():
     # Explicit id decoupled from display label: the rendered edge
     # label must be the display label, not the id.
-    g = build([6], rules=[
-        Rule(lambda x: x % 2 == 0,
-             Op(lambda x: x // 2, label="half", id="hv"))],
-        default=None)
+    g = (viter([6])
+         .case(lambda x: x % 2 == 0, lambda x: x // 2, label="half", id="hv")
+         .build())
     src = to_dot(g).source
     assert " half " in src
     assert " hv " not in src
@@ -62,10 +60,10 @@ def test_anchor_radius_crops_graph():
 
 def test_pseudo_edges_become_ghost_stubs():
     # Bound-stopped graph: 1→2→4→8→(pseudo)16.
-    g = build([1],
-                rules=[Rule(lambda x: True, Op(lambda x: 2 * x, label="×2"),
-                            bound=lambda x: 2 * x <= 8)],
-                default=None)
+    g = (viter([1])
+         .case(lambda x: True, lambda x: 2 * x,
+               label="×2", bound=lambda x: 2 * x <= 8)
+         .build())
     src = to_dot(g).source
     assert "ghost_out_8" in src
 
@@ -78,9 +76,10 @@ def test_outgoing_cut_emits_ghost_and_contributes_fill():
 
 
 def test_show_factors_adds_factorization_to_label():
-    g = build([6],
-                rules=[Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-                default=Op(lambda x: x + 2, label="+2"))
+    g = (viter([6])
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(lambda x: x + 2, label="+2")
+         .build())
     src = to_dot(g, show_factors=True).source
     # 6 = 2·3 should appear in some form.
     assert "2·3" in src or "2&middot;3" in src
@@ -105,12 +104,10 @@ def test_to_dot_time_limit_raises():
 
 def make_string_graph():
     # Drop trailing vowel until none remain. Pure string-valued iteration.
-    return build(
-        start=["banana", "garage"],
-        rules=[Rule(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
-                    Op(lambda s: s[:-1], label="drop-vowel"))],
-        default=None,
-    )
+    return (viter(["banana", "garage"])
+            .case(lambda s: len(s) > 0 and s[-1] in set("aeiou"),
+                  lambda s: s[:-1], label="drop-vowel")
+            .build())
 
 
 def test_to_dot_renders_string_valued_graph():
@@ -130,13 +127,10 @@ def test_to_dot_marks_string_valued_roots_with_bold_border():
 
 def test_to_dot_renders_tuple_valued_graph_after_json_roundtrip():
     import json
-    g = build(
-        start=[(0, 0)],
-        rules=[Rule(lambda p: p[0] < 2,
-                    Op(lambda p: (p[0] + 1, p[1]), label="right"),
-                    bound=lambda p: p[0] + 1 <= 2)],
-        default=None,
-    )
+    g = (viter([(0, 0)])
+         .case(lambda p: p[0] < 2, lambda p: (p[0] + 1, p[1]),
+               label="right", bound=lambda p: p[0] + 1 <= 2)
+         .build())
     wire = json.loads(json.dumps(g, default=str))
     src = to_dot(wire).source
     # The CLI-style representation of (0, 0) should appear as a label.

@@ -1,10 +1,9 @@
 #!/usr/bin/env viter
 # Same descent graph with custom op_colors override.
 # op_colors keys are the auto-derived op identities.
-build(
-    range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-).to_dot(
-    op_colors={"x // 3": "#a83232", "x + 2": "#3266a8"},
-).render()
+(viter(range(1, 30))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .to_dot(op_colors={"x // 3": "#a83232", "x + 2": "#3266a8"})
+ .render())

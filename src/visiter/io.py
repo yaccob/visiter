@@ -1,11 +1,22 @@
 """I/O utilities for the visiter fluent pipeline.
 
-Provides the ``write`` factory function used with ``.tap()``::
+Provides the ``write`` factory function used with ``.tap()``. The chain
+always starts with ``viter(...).case(...).default(...)``; the ``Builder``
+result is terminated with ``.build()`` (→ Graph) or ``.to_dot()`` (→ Dot
+when already on a Graph)::
 
-    build(...).tap(write()).to_dot().render()           # JSON → stdout
-    build(...).tap(write(file="g.json")).to_dot().render()  # JSON → file
-    build(...).to_dot().tap(write(file="g.dot")).render()   # DOT → file
-    build(...).to_dot().tap(write())                        # DOT → stdout
+    # JSON → stdout
+    viter(...).case(...).default(...).build() \\
+        .tap(write()).to_dot().render()
+    # JSON → file
+    viter(...).case(...).default(...).build() \\
+        .tap(write(file="g.json")).to_dot().render()
+    # DOT source → file
+    viter(...).case(...).default(...).build() \\
+        .to_dot().tap(write(file="g.dot")).render()
+    # DOT source → stdout
+    viter(...).case(...).default(...).build() \\
+        .to_dot().tap(write())
 
 ``write`` auto-detects the format from the object type:
   - ``Graph`` (dict) → JSON

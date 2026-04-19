@@ -58,7 +58,8 @@ class Dot:
 
         Use for saving DOT source snapshots or inspection::
 
-            build(...).to_dot().tap(write(file="g.dot")).render()
+            viter(...).case(...).default(...).build() \\
+                .to_dot().tap(write(file="g.dot")).render()
         """
         func(self)
         return self
@@ -72,7 +73,8 @@ class Dot:
 
         This is a convenience for use inside ``.tap()``::
 
-            build(...).to_dot().tap(write(file="g.dot")).render()
+            viter(...).case(...).default(...).build() \\
+                .to_dot().tap(write(file="g.dot")).render()
 
         But can also be called directly.  Returns self for chaining.
         """

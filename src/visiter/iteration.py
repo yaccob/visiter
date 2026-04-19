@@ -147,8 +147,8 @@ class Op(namedtuple("_Op", ["func", "label", "id"])):
         return super().__new__(cls, func, label, id)
 
 
-Rule = namedtuple("Rule", ["condition", "op", "bound"])
-Rule.__new__.__defaults__ = (None,)
+Rule = namedtuple("Rule", ["condition", "op", "bound", "exclusive"])
+Rule.__new__.__defaults__ = (None, False)
 
 
 JSON_SCHEMA_TYPES = frozenset({
@@ -326,6 +326,8 @@ def build(start, rules, default, *, max_depth=64,
     (`schemas/v1/graph.schema.json`). Breaking changes bump the major and
     ship under `/v2/` with v1 frozen.
     """
+    # Lazy import: iteration is imported by graph at module load, so
+    # pulling Graph in at the top would cycle.
     from .graph import Graph
     if on_limit not in ("raise", "stop"):
         raise ValueError(f"on_limit must be 'raise' or 'stop', got {on_limit!r}")
@@ -365,7 +367,6 @@ def build(start, rules, default, *, max_depth=64,
             return
         if prior_label == op.label:
             return
-        import warnings
         # stacklevel=3: warn → _register_op → build() body → user's
         # call to build().  Fragile if the nesting depth changes — if
         # _register_op is inlined, drop to 2; if an intermediate helper
@@ -479,12 +480,16 @@ def build(start, rules, default, *, max_depth=64,
                 any_matched = True
                 if at_max or (rule.bound is not None and not rule.bound(x)):
                     add_pseudo(x, rule.op.id)
+                    if rule.exclusive:
+                        break
                     continue
                 done, nxt = fire(x, rule.op, depth + 1)
                 if done is not None:
                     return done
                 if nxt is not None:
                     next_frontier.append(nxt)
+                if rule.exclusive:
+                    break
             if not any_matched and default is not None:
                 if at_max:
                     add_pseudo(x, default.id)
@@ -508,14 +513,3 @@ def build(start, rules, default, *, max_depth=64,
     return graph
 
 
-def viter(*args, **kwargs):
-    """One-shot convenience: build, convert to DOT, and render.
-
-    Equivalent to ``build(*args, **kwargs).to_dot().render()``.
-    All arguments are forwarded to ``build()``.
-
-    Use the explicit chain when you need ``to_dot`` options::
-
-        build(...).to_dot(anchor=1, radius=5).render()
-    """
-    return build(*args, **kwargs).to_dot().render()

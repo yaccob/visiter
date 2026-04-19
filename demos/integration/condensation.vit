@@ -4,10 +4,10 @@
 # (1↔3 and 2→4→6→2); condensation folds each into one node.
 import networkx as nx
 
-build(
-    range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-).filter(NxFilter(nx.condensation)) \
- .to_dot(node_label_attr="members") \
- .render()
+(viter(range(1, 30))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .filter(NxFilter(nx.condensation))
+ .to_dot(node_label_attr="members")
+ .render())

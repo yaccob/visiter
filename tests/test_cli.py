@@ -6,6 +6,25 @@ import sys
 
 import pytest
 
+
+# ---- pre-bound namespace exposes the new Builder API ----------------------
+
+def test_cli_namespace_viter_returns_builder():
+    from visiter.cli import _build_namespace
+    from visiter import Builder
+    ns = _build_namespace("/tmp/dummy.vit")
+    result = ns["viter"](range(1, 5))
+    assert isinstance(result, Builder)
+
+
+def test_cli_namespace_exposes_match_and_onlimit_enums():
+    from visiter.cli import _build_namespace
+    from visiter import Match, OnLimit
+    ns = _build_namespace("/tmp/dummy.vit")
+    assert ns["Match"] is Match
+    assert ns["OnLimit"] is OnLimit
+
+
 VENV_BIN = os.path.dirname(sys.executable)
 ENV = {**os.environ, "PATH": VENV_BIN + os.pathsep + os.environ.get("PATH", "")}
 
@@ -36,11 +55,10 @@ def test_help_flag():
 def test_vit_file_renders_svg_to_stdout(tmp_path):
     vit = tmp_path / "simple.vit"
     vit.write_text(
-        'build(\n'
-        '    range(1, 8),\n'
-        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
-        '    Op(lambda x: x+2, label="+2"),\n'
-        ').to_dot().render()\n'
+        '(viter(range(1, 8))\n'
+        ' .case(lambda x: x%3==0, lambda x: x//3, label="÷3")\n'
+        ' .default(lambda x: x+2, label="+2")\n'
+        ' .render())\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -51,11 +69,10 @@ def test_vit_file_renders_svg_to_file(tmp_path):
     vit = tmp_path / "to_file.vit"
     out = tmp_path / "out.svg"
     vit.write_text(
-        'build(\n'
-        '    range(1, 8),\n'
-        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
-        '    Op(lambda x: x+2, label="+2"),\n'
-        f').to_dot().render(file="{out}")\n'
+        '(viter(range(1, 8))\n'
+        ' .case(lambda x: x%3==0, lambda x: x//3, label="÷3")\n'
+        ' .default(lambda x: x+2, label="+2")\n'
+        f' .render(file="{out}"))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -68,11 +85,10 @@ def test_vit_file_writes_json_via_tap(tmp_path):
     vit = tmp_path / "json_out.vit"
     out = tmp_path / "graph.json"
     vit.write_text(
-        'build(\n'
-        '    range(1, 5),\n'
-        '    [],\n'
-        '    Op(lambda x: x+1, label="+1"),\n'
-        f').tap(write(file="{out}"))\n'
+        '(viter(range(1, 5))\n'
+        ' .default(lambda x: x+1, label="+1")\n'
+        ' .build()\n'
+        f' .tap(write(file="{out}")))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -85,11 +101,10 @@ def test_vit_file_writes_json_via_tap(tmp_path):
 def test_vit_file_writes_json_to_stdout(tmp_path):
     vit = tmp_path / "json_stdout.vit"
     vit.write_text(
-        'build(\n'
-        '    range(1, 5),\n'
-        '    [],\n'
-        '    Op(lambda x: x+1, label="+1"),\n'
-        ').tap(write())\n'
+        '(viter(range(1, 5))\n'
+        ' .default(lambda x: x+1, label="+1")\n'
+        ' .build()\n'
+        ' .tap(write()))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -99,10 +114,9 @@ def test_vit_file_writes_json_to_stdout(tmp_path):
 def test_vit_file_dot_format(tmp_path):
     vit = tmp_path / "dot_fmt.vit"
     vit.write_text(
-        'build(\n'
-        '    [1], [], Op(lambda x: x+1, label="+1"),\n'
-        '    max_nodes=3,\n'
-        ').to_dot().render(format="dot")\n'
+        '(viter([1], max_nodes=3)\n'
+        ' .default(lambda x: x+1, label="+1")\n'
+        ' .render(format="dot"))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -114,11 +128,10 @@ def test_vit_file_with_shebang(tmp_path):
     vit.write_text(
         '#!/usr/bin/env viter\n'
         '# A comment\n'
-        'build(\n'
-        '    range(1, 5),\n'
-        '    [Rule(lambda x: x%3==0, Op(lambda x: x//3, label="÷3"))],\n'
-        '    Op(lambda x: x+2, label="+2"),\n'
-        ').to_dot().render()\n'
+        '(viter(range(1, 5))\n'
+        ' .case(lambda x: x%3==0, lambda x: x//3, label="÷3")\n'
+        ' .default(lambda x: x+2, label="+2")\n'
+        ' .render())\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -130,13 +143,10 @@ def test_vit_file_with_shebang(tmp_path):
 def test_fraction_in_namespace(tmp_path):
     vit = tmp_path / "fraction.vit"
     vit.write_text(
-        'build(\n'
-        '    [Fraction(1)],\n'
-        '    [Rule(lambda x: True, Op(lambda x: 1 + 1/x, label="step"))],\n'
-        '    None,\n'
-        '    max_depth=4,\n'
-        '    key_type="number",\n'
-        ').tap(write())\n'
+        '(viter([Fraction(1)], max_depth=4, key_type="number")\n'
+        ' .case(lambda x: True, lambda x: 1 + 1/x, label="step")\n'
+        ' .build()\n'
+        ' .tap(write()))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -146,7 +156,7 @@ def test_fraction_in_namespace(tmp_path):
 def test_decimal_in_namespace(tmp_path):
     vit = tmp_path / "decimal.vit"
     vit.write_text(
-        'build([Decimal("1.5")], [], None).tap(write())\n'
+        'viter([Decimal("1.5")]).build().tap(write())\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -157,12 +167,10 @@ def test_custom_import_in_vit(tmp_path):
     vit = tmp_path / "custom_import.vit"
     vit.write_text(
         'import math\n'
-        'build(\n'
-        '    [16],\n'
-        '    [Rule(lambda x: x > 2, Op(lambda x: int(math.sqrt(x)), label="sqrt"))],\n'
-        '    None,\n'
-        '    max_nodes=5,\n'
-        ').tap(write())\n'
+        '(viter([16], max_nodes=5)\n'
+        ' .case(lambda x: x > 2, lambda x: int(math.sqrt(x)), label="sqrt")\n'
+        ' .build()\n'
+        ' .tap(write()))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -176,7 +184,7 @@ def test_sys_argv_passthrough(tmp_path):
     vit.write_text(
         'import sys\n'
         'n = int(sys.argv[1]) if len(sys.argv) > 1 else 5\n'
-        'build(range(1, n), [], None).tap(write())\n'
+        'viter(range(1, n)).build().tap(write())\n'
     )
     r = run_viter(str(vit), "3")
     assert r.returncode == 0, r.stderr
@@ -192,7 +200,7 @@ def test_sys_argv_with_argparse(tmp_path):
         'p = argparse.ArgumentParser()\n'
         'p.add_argument("--start", type=int, default=5)\n'
         'args = p.parse_args()\n'
-        'build(range(1, args.start), [], None).tap(write())\n'
+        'viter(range(1, args.start)).build().tap(write())\n'
     )
     r = run_viter(str(vit), "--start", "4")
     assert r.returncode == 0, r.stderr
@@ -208,7 +216,7 @@ def test_dunder_file_is_bound(tmp_path):
     vit.write_text(
         'import sys\n'
         'print(__file__, file=sys.stderr)\n'
-        'build([1], [], None).tap(write())\n'
+        'viter([1]).build().tap(write())\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -225,7 +233,7 @@ def test_missing_file_exits_nonzero():
 
 def test_syntax_error_shows_traceback(tmp_path):
     vit = tmp_path / "bad_syntax.vit"
-    vit.write_text("build((\n")
+    vit.write_text("viter((\n")
     r = run_viter(str(vit))
     assert r.returncode != 0
     assert "SyntaxError" in r.stderr
@@ -236,12 +244,10 @@ def test_syntax_error_shows_traceback(tmp_path):
 def test_max_nodes_default_warns(tmp_path):
     vit = tmp_path / "warn_nodes.vit"
     vit.write_text(
-        'build(\n'
-        '    [0],\n'
-        '    [Rule(lambda x: True, Op(lambda x: x+1, label="+1"))],\n'
-        '    None,\n'
-        '    max_nodes=5,\n'
-        ').tap(write())\n'
+        '(viter([0], max_nodes=5)\n'
+        ' .case(lambda x: True, lambda x: x+1, label="+1")\n'
+        ' .build()\n'
+        ' .tap(write()))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr
@@ -251,12 +257,10 @@ def test_max_nodes_default_warns(tmp_path):
 def test_max_depth_default_warns(tmp_path):
     vit = tmp_path / "warn_depth.vit"
     vit.write_text(
-        'build(\n'
-        '    [0],\n'
-        '    [Rule(lambda x: True, Op(lambda x: x+1, label="+1"))],\n'
-        '    None,\n'
-        '    max_depth=3,\n'
-        ').tap(write())\n'
+        '(viter([0], max_depth=3)\n'
+        ' .case(lambda x: True, lambda x: x+1, label="+1")\n'
+        ' .build()\n'
+        ' .tap(write()))\n'
     )
     r = run_viter(str(vit))
     assert r.returncode == 0, r.stderr

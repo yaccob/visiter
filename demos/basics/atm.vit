@@ -2,12 +2,8 @@
 # ATM withdrawal: 80 EUR to dispense, the machine only has 50, 20,
 # and 10 EUR notes. Every path from 80 to 0 is a valid banknote
 # combination for the payout.
-viter(
-    80,
-    [
-        Rule(lambda n: n >= 50, Op(lambda n: n - 50, label="50€")),
-        Rule(lambda n: n >= 20, Op(lambda n: n - 20, label="20€")),
-        Rule(lambda n: n >= 10, Op(lambda n: n - 10, label="10€")),
-    ],
-    None,
-)
+(viter(80)
+ .case(lambda n: n >= 50, lambda n: n - 50, label="50€")
+ .case(lambda n: n >= 20, lambda n: n - 20, label="20€")
+ .case(lambda n: n >= 10, lambda n: n - 10, label="10€")
+ .render())

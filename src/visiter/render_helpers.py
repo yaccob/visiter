@@ -232,7 +232,7 @@ def build_dot(graph, op_labels,
               show_binary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
               resolved=None,
-              deadline=None, on_limit="raise",
+              deadline=None, on_limit="stop",
               node_label=None, node_label_attr=None):
     """Build a Graphviz Digraph from a graph dict.
 
@@ -252,7 +252,8 @@ def build_dot(graph, op_labels,
 
     `deadline` (Unix timestamp from `parse_time_limit`) bounds wall-clock
     time spent in the build loops; on hit, behavior follows `on_limit`
-    ("raise" → RuntimeError, "stop" → return the partially-built dot).
+    ("stop" → return the partially-built dot [default], "raise" →
+    RuntimeError).
     """
     import graphviz
 

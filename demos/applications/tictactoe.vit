@@ -13,17 +13,17 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(__file__))
-from tictactoe import empty_board, make_rules, has_winner, make_node_label
+from tictactoe import empty_board, make_cases, has_winner, make_node_label
 
 p = argparse.ArgumentParser()
 p.add_argument("--depth", type=int, default=9)
 args = p.parse_args()
 
-build(
-    [empty_board()],
-    make_rules(),
-    None,
-    max_depth=args.depth,
-    max_nodes=None,
-    tags={"highlight": has_winner},
-).to_dot(node_label=make_node_label()).render()
+(viter([empty_board()],
+       max_depth=args.depth,
+       max_nodes=None,
+       tags={"highlight": has_winner})
+ .cases(make_cases())
+ .build()
+ .to_dot(node_label=make_node_label())
+ .render())

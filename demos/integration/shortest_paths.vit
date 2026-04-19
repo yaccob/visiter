@@ -6,11 +6,10 @@ import networkx as nx
 from visiter.analytics import to_networkx
 
 # Build the descent graph
-g = build(
-    range(1, 30),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-)
+g = (viter(range(1, 30))
+     .case(lambda x: x % 3 == 0, lambda x: x // 3)
+     .default(lambda x: x + 2)
+     .build())
 
 # Find all nodes on any shortest path to "1"
 nxg = to_networkx(g)

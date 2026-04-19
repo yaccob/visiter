@@ -6,15 +6,14 @@ from io import StringIO, BytesIO
 
 import pytest
 
-from visiter import Op, Rule, build, to_dot, Graph, Dot, write
+from visiter import viter, to_dot, Graph, Dot, write
 
 
 def simple_graph():
-    return build(
-        [1],
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    )
+    return (viter([1])
+            .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+            .default(lambda x: x + 2, label="+2")
+            .build())
 
 
 # ---- Graph is a dict -------------------------------------------------------
@@ -54,11 +53,10 @@ def test_graph_to_dot_has_source():
 
 
 def test_graph_to_dot_kwargs_forwarded():
-    g = build(
-        range(1, 20),
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    )
+    g = (viter(range(1, 20))
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(lambda x: x + 2, label="+2")
+         .build())
     d = g.to_dot(anchor=1, radius=2, direction="backward")
     assert "digraph" in d.source
 
@@ -199,11 +197,11 @@ def test_write_factory_dot_to_file(tmp_path):
 
 def test_full_chain_build_to_render(tmp_path):
     out = tmp_path / "chain.svg"
-    build(
-        range(1, 8),
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    ).to_dot().render(file=str(out))
+    (viter(range(1, 8))
+     .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+     .default(lambda x: x + 2, label="+2")
+     .build()
+     .to_dot().render(file=str(out)))
     assert out.exists()
     body = out.read_text()
     assert "<svg" in body
@@ -213,14 +211,14 @@ def test_full_chain_with_taps(tmp_path):
     json_out = tmp_path / "g.json"
     dot_out = tmp_path / "g.dot"
     svg_out = tmp_path / "g.svg"
-    build(
-        range(1, 8),
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    ).tap(write(file=str(json_out))) \
-     .to_dot() \
-     .tap(write(file=str(dot_out))) \
-     .render(file=str(svg_out))
+    (viter(range(1, 8))
+     .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+     .default(lambda x: x + 2, label="+2")
+     .build()
+     .tap(write(file=str(json_out)))
+     .to_dot()
+     .tap(write(file=str(dot_out)))
+     .render(file=str(svg_out)))
     assert json_out.exists()
     assert dot_out.exists()
     assert svg_out.exists()
@@ -236,11 +234,10 @@ def test_nx_filter():
     import networkx as nx
     from visiter import NxFilter
 
-    g = build(
-        range(1, 10),
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    )
+    g = (viter(range(1, 10))
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(lambda x: x + 2, label="+2")
+         .build())
     filtered = g.filter(NxFilter(nx.condensation))
     assert isinstance(filtered, Graph)
     assert "nodes" in filtered
@@ -253,13 +250,13 @@ def test_nx_filter_in_chain(tmp_path):
     from visiter import NxFilter
 
     out = tmp_path / "condensed.svg"
-    build(
-        range(1, 10),
-        [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3, label="÷3"))],
-        Op(lambda x: x + 2, label="+2"),
-    ).filter(NxFilter(nx.condensation)) \
-     .to_dot() \
-     .render(file=str(out))
+    (viter(range(1, 10))
+     .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+     .default(lambda x: x + 2, label="+2")
+     .build()
+     .filter(NxFilter(nx.condensation))
+     .to_dot()
+     .render(file=str(out)))
     assert out.exists()
     assert "<svg" in out.read_text()
 

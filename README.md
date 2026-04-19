@@ -4,22 +4,25 @@ See what a discrete iteration actually does — as a graph.
 
 ## The simplest case
 
-Integers 1–9. Rule: divisible by 3 → divide by 3. Everything
-else → add 2. Where does each value end up?
+Integers 1–9. Case: divisible by 3 → divide by 3. Default (everything
+else) → add 2. Where does each value end up?
 
 ```python
 #!/usr/bin/env viter
-viter(
-    range(1, 10),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-)
+(viter(range(1, 10))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .render())
 ```
 
 ![descent graph, range 1–9](docs/images/readme_quickstart.svg)
 
-Save as `descent.vit`, run with `viter descent.vit > out.svg`.
-One call, auto-derived edge labels, SVG on stdout.
+Save as `descent.vit`, run with `viter descent.vit > out.svg`. The
+`#!/usr/bin/env viter` shebang also lets you `chmod +x descent.vit`
+and execute the file directly.
+
+`.render()` is the shortcut terminal — it builds the graph, converts
+to Graphviz, and writes SVG to stdout in one call.
 
 ## Install
 
@@ -32,40 +35,58 @@ Graphviz must be available on `PATH` (`brew install graphviz` /
 
 ## Going further
 
-The fluent API gives you full control over each stage:
+`.render()` is convenient for the common case. For anything more —
+cropping, custom colors, side-effects, filters — materialize the
+Graph explicitly via `.build()` and keep chaining:
 
 ```python
 #!/usr/bin/env viter
-build(
-    range(1, 10),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-).to_dot(anchor=1, radius=8, direction="backward").render()
+(viter(range(1, 10))
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x + 2)
+ .build()
+ .to_dot(anchor=1, radius=8, direction="backward")
+ .render())
 ```
 
 Save intermediate results with `.tap()`:
 
 ```python
-build(...).tap(write(file="graph.json")).to_dot().render(file="out.svg")
+(viter(...).case(...).default(...).build()
+ .tap(write(file="graph.json"))
+ .to_dot()
+ .render(file="out.svg"))
 ```
 
 Use NetworkX for graph analysis via `.filter()`:
 
 ```python
 import networkx as nx
-build(...).filter(NxFilter(nx.condensation)).to_dot().render()
+(viter(...).case(...).default(...).build()
+ .filter(NxFilter(nx.condensation))
+ .to_dot()
+ .render())
+```
+
+If-elif-else semantics (first matching case wins) via `match=Match.FIRST`:
+
+```python
+(viter(range(1, 17), match=Match.FIRST)
+ .case(lambda x: x % 2 == 0, lambda x: x // 2)
+ .case(lambda x: x % 3 == 0, lambda x: x // 3)
+ .default(lambda x: x * 5 + 7)
+ .render())
 ```
 
 Use the Python API directly (outside `.vit` files):
 
 ```python
-from visiter import build, Op, Rule
+from visiter import viter
 
-graph = build(
-    range(1, 10),
-    [Rule(lambda x: x % 3 == 0, Op(lambda x: x // 3))],
-    Op(lambda x: x + 2),
-)
+graph = (viter(range(1, 10))
+         .case(lambda x: x % 3 == 0, lambda x: x // 3)
+         .default(lambda x: x + 2)
+         .build())
 graph.to_dot().render(file="descent.svg")
 ```
 

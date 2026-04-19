@@ -2,7 +2,7 @@
 # Ghost stubs (pseudo-edges) have two distinct sources, both rendered
 # the same way — as dashed arrows to invisible nodes:
 #
-#   (a) Rule.bound returned False — "the op applies, but we stop here"
+#   (a) bound= returned False — "the op applies, but we stop here"
 #   (b) max_depth reached — "BFS says: don't expand further"
 #
 # This demo renders both side by side so you can see the identical
@@ -12,28 +12,17 @@ import os
 out_dir = os.path.join(os.path.dirname(__file__), "out")
 os.makedirs(out_dir, exist_ok=True)
 
-# (a) Rule.bound: doubling stops at 16, tripling at 18.
-build(
-    [1, 5],
-    [
-        Rule(lambda x: True, Op(lambda x: 2 * x),
-             bound=lambda x: 2 * x <= 16),
-        Rule(lambda x: True, Op(lambda x: 3 * x),
-             bound=lambda x: 3 * x <= 18),
-    ],
-    None,
-).to_dot().render(file=os.path.join(out_dir, "ghost_stubs_bound.svg"))
+# (a) bound: doubling stops at 16, tripling at 18.
+(viter([1, 5])
+ .case(lambda x: True, lambda x: 2 * x, bound=lambda x: 2 * x <= 16)
+ .case(lambda x: True, lambda x: 3 * x, bound=lambda x: 3 * x <= 18)
+ .render(file=os.path.join(out_dir, "ghost_stubs_bound.svg")))
 
 # (b) max_depth: same rules, no bounds; expansion stops at depth 2.
-build(
-    [1, 5],
-    [
-        Rule(lambda x: True, Op(lambda x: 2 * x)),
-        Rule(lambda x: True, Op(lambda x: 3 * x)),
-    ],
-    None,
-    max_depth=2,
-).to_dot().render(file=os.path.join(out_dir, "ghost_stubs_max_depth.svg"))
+(viter([1, 5], max_depth=2)
+ .case(lambda x: True, lambda x: 2 * x)
+ .case(lambda x: True, lambda x: 3 * x)
+ .render(file=os.path.join(out_dir, "ghost_stubs_max_depth.svg")))
 
 import sys
 print(f"wrote {out_dir}/ghost_stubs_bound.svg", file=sys.stderr)

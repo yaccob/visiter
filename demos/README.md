@@ -24,7 +24,7 @@ viter demos/applications/tictactoe.vit --depth 3 > tictactoe.svg
 | `cropping.vit`         | Tight anchor/radius crop with ghost stubs at the boundary           |
 | `custom_colors.vit`    | `op_colors` override (pin colors by op identity)                    |
 | `color_stability.vit`  | How op colors stay stable as rules are added/reordered              |
-| `ghost_stubs.vit`      | Pseudo-edges from `Rule.bound` vs. `max_depth` — same rendering    |
+| `ghost_stubs.vit`      | Pseudo-edges from a case's `bound=` vs. `max_depth` — same rendering |
 | `multi_op_fills.vit`   | Wedged pie-slice fills for nodes with multiple outgoing ops         |
 
 ## integration/

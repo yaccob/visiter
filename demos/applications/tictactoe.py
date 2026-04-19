@@ -104,26 +104,27 @@ def coord(pos):
     return f"{COLS[pos % 3]}{ROWS[pos // 3]}"
 
 
-# Pre-built Op/Rule factories so the .vit file stays concise.
+# Pre-built case factories so the .vit file stays concise.
 
-def make_rules():
-    """Return 9 Rules, one per board position.
+def make_cases():
+    """Return 9 case tuples, one per board position.
 
-    Each rule fires when the position is empty and the game isn't over.
+    Each case fires when the position is empty and the game isn't over.
     The op places the current player's mark and normalises to canonical
     form.  Edge labels are the a1–c3 coordinate.
-    """
-    from visiter import Op, Rule
 
-    rules = []
+    Items are ``(condition, fn, kwargs)`` tuples consumed by
+    ``Builder.cases()``.
+    """
+    cases = []
     for pos in range(9):
         label = coord(pos)
-        rules.append(Rule(
+        cases.append((
             lambda board, p=pos: board[p] == EMPTY and not is_terminal(board),
-            Op(lambda board, p=pos: make_move(board, p),
-               label=label, id=label),
+            lambda board, p=pos: make_move(board, p),
+            {"label": label, "id": label},
         ))
-    return rules
+    return cases
 
 
 def make_node_label():

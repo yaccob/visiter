@@ -2,40 +2,42 @@
 
 Public API:
 
-    build(start, rules, default, *, max_depth=64, max_nodes=1024, ...)
-        Build a graph by applying guard-and-operation Rules from each start
-        via BFS.  Returns a Graph (dict subclass) supporting fluent chaining.
+    viter(iterable, *, max_depth=64, max_nodes=1024, match=Match.ALL, ...)
+        Start a fluent Builder chain. Add cases via .case() / .cases(),
+        optionally a .default(), then terminate with .build() (returns
+        Graph) or .render() (shortcut for build().to_dot().render()).
 
-    Op(func, *, label=None, id=None)
-        An operation: a callable taking the current value, plus
-        keyword-only fields — `label` (display string) and `id`
-        (stable key for `op_order` and `op_colors` pinning).
-
-    Rule(condition, op, bound=None)
-        A guarded operation. Condition decides applicability; optional
-        bound distinguishes "stop here" from "not applicable".
-
-    to_dot(graph, *, anchor=..., radius=..., op_colors=..., ...)
-        Turn a build-result into a Dot object for rendering.
+    Match, OnLimit
+        Enums controlling chain-level semantics:
+        - Match.ALL / Match.FIRST: how case conditions compose (additive
+          vs. first-match-wins).
+        - OnLimit.STOP / OnLimit.RAISE: behavior when max_depth,
+          max_nodes, or time_limit is hit.
 
     Graph
-        dict subclass with fluent methods: .to_dot(), .filter(), .tap()
+        dict subclass returned by .build(), with fluent methods
+        .to_dot(), .filter(), .tap(), .write().
 
     Dot
-        Wrapper around graphviz.Digraph: .render(), .tap(), .source
+        Wrapper around graphviz.Digraph: .render(), .tap(), .source.
+
+    to_dot(graph, *, anchor=..., radius=..., op_colors=..., ...)
+        Standalone converter (equivalent to Graph.to_dot()).
 
 Fluent pipeline::
 
-    build(...).to_dot().render()
-    build(...).tap(write(file="g.json")).to_dot().render(file="out.svg")
-    build(...).filter(NxFilter(nx.condensation)).to_dot().render()
+    viter(range(1, 28)).case(...).default(...).render()
+    viter(...).case(...).default(...).build().to_dot(...).render(...)
+    viter(...).case(...).build().tap(write(file="g.json")).to_dot().render()
+    viter(...).case(...).build().filter(NxFilter(nx.condensation)).to_dot().render()
 """
 
+from .builder import Builder, Match, OnLimit, viter
 from .dot import Dot
 from .filters import NxFilter
 from .graph import Graph
 from .io import write
-from .iteration import Op, Rule, build, parse_range, viter
+from .iteration import parse_range
 from .to_dot import to_dot
 from .render_helpers import (
     DEFAULT_OP_PALETTE,
@@ -49,14 +51,14 @@ from .render_helpers import (
     resolve_op_colors,
 )
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 
 __all__ = [
     # Core API
-    "Op",
-    "Rule",
-    "build",
     "viter",
+    "Builder",
+    "Match",
+    "OnLimit",
     "to_dot",
     "Graph",
     "Dot",
