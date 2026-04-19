@@ -8,10 +8,3 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.swp
-.DS_Store
-CLAUDE.md
-.claude/settings.local.json
-.reviews/
-transcripts/
-qa/
