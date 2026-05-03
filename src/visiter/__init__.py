@@ -14,6 +14,13 @@ Public API:
         - OnLimit.STOP / OnLimit.RAISE: behavior when max_depth,
           max_nodes, or time_limit is hit.
 
+    OpResult
+        Optional return type for case/default fns that want a per-call
+        edge label. Returning ``OpResult(value, label="…")`` overrides
+        the case's static label for that one edge; returning a plain
+        value (or ``OpResult(value)`` / ``OpResult(value, label=None)``)
+        keeps the static label.
+
     Graph
         dict subclass returned by .build(), with fluent methods
         .to_dot(), .filter(), .tap(), .write().
@@ -37,7 +44,7 @@ from .dot import Dot
 from .filters import NxFilter
 from .graph import Graph
 from .io import write
-from .iteration import parse_range
+from .iteration import OpResult, parse_range
 from .to_dot import to_dot
 from .render_helpers import (
     DEFAULT_OP_PALETTE,
@@ -51,7 +58,7 @@ from .render_helpers import (
     resolve_op_colors,
 )
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 __all__ = [
     # Core API
@@ -59,6 +66,7 @@ __all__ = [
     "Builder",
     "Match",
     "OnLimit",
+    "OpResult",
     "to_dot",
     "Graph",
     "Dot",

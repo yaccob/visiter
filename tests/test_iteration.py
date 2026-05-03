@@ -8,7 +8,7 @@ implementation details.
 
 import pytest
 
-from visiter import viter
+from visiter import OpResult, viter
 from visiter.iteration import Op  # internal: label/id derivation tests
 
 
@@ -247,3 +247,95 @@ def test_build_no_warning_when_id_matches_same_op_reused():
          .case(lambda x: x > 1, shared, id="dec")
          .build())
     assert not any("id collision" in str(w.message) for w in caught)
+
+
+# ---- OpResult: per-call dynamic edge labels --------------------------------
+
+def test_op_result_default_label_is_none():
+    # Bare OpResult(value) leaves the label slot None — that is the
+    # signal "no per-call override, fall back to the static op label."
+    r = OpResult(5)
+    assert r.value == 5
+    assert r.label is None
+
+
+def test_plain_value_return_bakes_static_label_into_edge():
+    # Without OpResult, every edge produced from this op carries the
+    # static label as its edge.label — labels live on edges now,
+    # rendered without consulting op_labels.
+    g = (viter([1])
+         .case(lambda x: True, lambda x: 2 * x, label="×2",
+               bound=lambda x: 2 * x <= 8)
+         .build())
+    assert all(e["label"] == "×2" for e in g["edges"])
+
+
+def test_op_result_with_label_overrides_per_edge():
+    def doubling(x):
+        return OpResult(2 * x, label=f"×2(@{x})")
+    g = (viter([1])
+         .case(lambda x: True, doubling, label="×2",
+               bound=lambda x: 2 * x <= 8)
+         .build())
+    edges = sorted(g["edges"], key=lambda e: int(e["from"]))
+    assert [e["label"] for e in edges] == ["×2(@1)", "×2(@2)", "×2(@4)"]
+
+
+def test_op_result_label_none_falls_back_to_static_label():
+    g = (viter([1])
+         .case(lambda x: True, lambda x: OpResult(2 * x), label="×2",
+               bound=lambda x: 2 * x <= 8)
+         .build())
+    assert all(e["label"] == "×2" for e in g["edges"])
+
+
+def test_op_result_works_in_default_branch():
+    def step(x):
+        return OpResult(x + 1, label=f"+1@{x}")
+    g = (viter([1, 2, 3], max_nodes=20)
+         .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")
+         .default(step)
+         .build())
+    default_edges = [e for e in g["edges"]
+                     if e["op"] != "x // 3"]
+    by_src = {e["from"]: e["label"] for e in default_edges}
+    assert by_src["1"] == "+1@1"
+    assert by_src["2"] == "+1@2"
+    # 3 matches the case (÷3), not the default
+    assert "3" not in by_src
+
+
+def test_pseudo_edge_at_max_depth_uses_static_label_only():
+    # At max_depth the fn is not invoked, so OpResult never runs there.
+    # The pseudo-edge therefore always carries the static op label.
+    g = (viter([1], max_depth=1)
+         .case(lambda x: True,
+               lambda x: OpResult(2 * x, label="should-not-appear"),
+               label="×2")
+         .build())
+    assert g["pseudo_edges"]
+    assert all(pe["label"] == "×2" for pe in g["pseudo_edges"])
+
+
+def test_pseudo_edge_from_bound_uses_static_label_only():
+    # Bound-suppressed pseudo-edges follow the same rule as max_depth.
+    g = (viter([1])
+         .case(lambda x: True,
+               lambda x: OpResult(2 * x, label="should-not-appear"),
+               label="×2", bound=lambda x: 2 * x <= 4)
+         .build())
+    assert g["pseudo_edges"]
+    assert all(pe["label"] == "×2" for pe in g["pseudo_edges"])
+
+
+def test_op_result_value_can_itself_be_a_tuple():
+    # Iteration values may be 2-tuples; an OpResult must not be confused
+    # with such a value, and a tuple value must not be misread as
+    # (value, label).
+    def step(s):
+        return OpResult((s[0] + 1, s[1]), label=f"step{s[0]}")
+    g = (viter([(1, 1)])
+         .case(lambda s: s[0] < 4, step)
+         .build())
+    assert sorted(g["nodes"].keys()) == ["(1, 1)", "(2, 1)", "(3, 1)", "(4, 1)"]
+    assert sorted(e["label"] for e in g["edges"]) == ["step1", "step2", "step3"]

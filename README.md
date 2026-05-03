@@ -90,6 +90,23 @@ graph = (viter(range(1, 10))
 graph.to_dot().render(file="descent.svg")
 ```
 
+Per-call edge labels via `OpResult` — for when the static `label=` is
+not enough and each step's edge should carry its own annotation:
+
+```python
+from visiter import OpResult, viter
+
+def odd_step(x):
+    increased = 3 * x + 1
+    div = (increased & -increased).bit_length() - 1
+    return OpResult(increased >> div, label=f"3x+1, ÷2×{div}")
+
+(viter([27])
+ .case(lambda x: x % 2 == 0, lambda x: x // 2, label="÷2")
+ .default(odd_step, label="3x+1")
+ .render())
+```
+
 ## Why VisIter?
 
 **Free, scriptable, Graphviz-native orbit-graph rendering for discrete

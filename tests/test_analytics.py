@@ -86,7 +86,8 @@ def test_from_networkx_of_bare_graph_works():
         "a": {"depth": 0, "key_type": "string"},
         "b": {"depth": 1, "key_type": "string"},
     }
-    assert out["edges"] == [{"from": "a", "to": "b", "op": "step"}]
+    # Bare NX edges without `label` attr fall back to op id at construction.
+    assert out["edges"] == [{"from": "a", "to": "b", "op": "step", "label": "step"}]
     assert out["pseudo_edges"] == []
     # roots default to empty when not provided.
     assert out["roots"] == []

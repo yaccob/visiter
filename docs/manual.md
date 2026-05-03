@@ -60,9 +60,16 @@ adds a guarded case to the chain:
 
 - `condition(x) -> bool` — *applicability*: is this case's `fn` even
   meaningful for this value?
-- `fn(x) -> x'` — the operation producing the successor.
-- `label` — display string on the edge. When omitted, derived from
-  `fn`: `fn.__name__` for named functions, the lambda body's
+- `fn(x) -> x'` — the operation producing the successor. May return
+  either a plain value (the edge is labeled with this case's static
+  `label`) or an `OpResult(value, label="…")` to override the edge
+  label *for this one call*. `OpResult(value)` and
+  `OpResult(value, label=None)` are equivalent and fall back to the
+  static label, so a partially-dynamic op can opt out per call without
+  switching return shapes.
+- `label` — static display string on every edge produced by this case
+  (unless `fn` returns an overriding `OpResult`). When omitted, derived
+  from `fn`: `fn.__name__` for named functions, the lambda body's
   `ast.unparse` form for lambdas (same-line lambdas are disambiguated
   by bytecode source position). When the source isn't retrievable
   (REPL, `functools.partial`, C extensions) and no `label=` is given,
@@ -102,10 +109,13 @@ viter(start).cases(cases).build()
 ```
 
 `.default(fn=None, *, label=None, id=None)` sets the fallback op that
-fires when no case matched. `.default()` without arguments (or with
-`fn=None`) declares values with no matching case as leaves. Calling
-`.default()` twice on the same builder raises `RuntimeError` —
-defaults are singletons.
+fires when no case matched. `default` has the same return-value contract
+as `case`: a plain value uses the static `label`, an `OpResult(value,
+label=…)` overrides per call. `default` is not a "failure" branch — it
+is a regular case without an explicit condition. `.default()` without
+arguments (or with `fn=None`) declares values with no matching case as
+leaves. Calling `.default()` twice on the same builder raises
+`RuntimeError` — defaults are singletons.
 
 `.build()` materializes the chain into a `Graph`. This is where
 lambdas are evaluated, rules are registered, and BFS runs.
@@ -155,11 +165,13 @@ with older examples.
                                                   # "string", "array", ...
                           "tags":     [str, ...], # if any tag predicate matched
                       }, ...},
-    "edges":         [{"from": A, "to": B, "op": id}, ...],
-    "pseudo_edges":  [{"from": A,           "op": id}, ...],
+    "edges":         [{"from": A, "to": B, "op": id, "label": str}, ...],
+    "pseudo_edges":  [{"from": A,           "op": id, "label": str}, ...],
     "op_order":      [str, ...],       # distinct op ids in case-declaration order,
                                        # then default's id if not already in
-    "op_labels":     {id: label, ...}  # map from id to display label
+    "op_labels":     {id: label, ...}  # static op-level metadata (provenance,
+                                       # palette legends); the renderer reads
+                                       # edge.label directly, not this map
 }
 ```
 
@@ -236,7 +248,7 @@ graph = (viter(range(1, 30),
 ### Signature
 
 ```python
-to_dot(graph, *, op_labels=None,
+to_dot(graph, *,
              anchor=None, radius=None, direction="forward",
              value_range=None,
              op_colors=None, palette=None,
@@ -251,12 +263,12 @@ around a `graphviz.Digraph` with `.source`, `.render(format, file)`,
 
 ### Inputs
 
-- `graph`: dict with the shape produced by `.build()`. (Strictly:
-  needs `roots`, `nodes`, `edges`, optional `op_order`, optional
-  `pseudo_edges`.)
-- `op_labels`: optional `{op_id: display_label}` dict. Ops not present
-  fall back to `graph["op_labels"]`, then to `format_op_label`, which
-  converts simple notations like `/2` → `÷2`, `*3+1` → `×3 + 1`.
+- `graph`: dict with the shape produced by `.build()`. Edge labels are
+  read directly from each `edge["label"]`/`pseudo_edge["label"]` —
+  `to_dot` does not consult `graph["op_labels"]` for edge beschriftung.
+  Custom rendering of labels happens at build time (per-call via
+  `OpResult`, or per-case via the static `label=` argument on
+  `.case()` / `.default()`).
 - `anchor`, `radius`, `direction`: BFS neighborhood crop. Only nodes
   within `radius` hops of `anchor` are rendered. `direction` ∈
   `{"forward", "backward", "both"}`. Default `"forward"` — walks

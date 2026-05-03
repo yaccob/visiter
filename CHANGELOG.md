@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.13.0] — 2026-05-03
+
+### Breaking
+- **Edge schema: `label` is now a required field on every `edge` and
+  `pseudo_edge`.** Hand-written graph dicts (test fixtures, NetworkX
+  round-trips, JSON snapshots produced before this version) must be
+  updated to carry `label` per edge — the renderer reads `edge["label"]`
+  directly without consulting `op_labels`. The `additionalProperties:
+  false` constraint stays, so unknown fields still error. Schema URL
+  remains `/v1/graph.schema.json` because v0.x has no compatibility
+  guarantees yet; a future v1.0 release would have shipped this as
+  `/v2/`.
+- **`to_dot(..., op_labels=...)` keyword removed.** Per-op render-time
+  label overrides are no longer a concern of the renderer; labels are
+  baked into edges at build time. Callers that need different labels
+  rebuild the graph (or use `OpResult` from inside an op fn).
+- **`build_dot(graph, op_labels, ...)` signature changed.** The
+  `op_labels` positional parameter is gone — `build_dot` reads
+  `edge["label"]` from each edge directly.
+
+### Added
+- **`OpResult(value, label=None)`** — optional return type for case/
+  default fns that want a per-call edge label. Returning
+  `OpResult(value, label="…")` from `fn` overrides the case's static
+  label for that one edge; returning a plain value (or `OpResult(value)`
+  / `OpResult(value, label=None)`) keeps the static label. Discrimination
+  is by `isinstance`, so the value field can carry tuples or any custom
+  object without ambiguity. Pseudo-edges (suppressed by `bound=False`
+  or `max_depth`) never call `fn` and therefore always carry the static
+  label. Exported from `visiter` and pre-bound in the `.vit` namespace.
+
+---
+
 ## [0.12.0] — 2026-04-19
 
 ### Breaking

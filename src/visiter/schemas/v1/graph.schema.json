@@ -39,7 +39,7 @@
       "uniqueItems": true
     },
     "op_labels": {
-      "description": "Map from op id to the display label rendered on its edges. The id is the stable key (used in `op_order`, `edge.op`, and op_colors pins); label is cosmetic. Optional: when omitted, consumers SHOULD fall back to displaying the id itself.",
+      "description": "Map from op id to the *static* op label set on the case/default. Pure op-level metadata: provenance and palette legends consult this map. Edge rendering does NOT — each edge carries its own `label` field, which equals this static label unless the op's fn returned an `OpResult(value, label=…)` overriding it per call.",
       "type": "object",
       "propertyNames": { "type": "string", "minLength": 1 },
       "additionalProperties": { "type": "string" }
@@ -72,21 +72,23 @@
     },
     "edge": {
       "type": "object",
-      "required": ["from", "to", "op"],
+      "required": ["from", "to", "op", "label"],
       "additionalProperties": false,
       "properties": {
-        "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
-        "to":   { "description": "Target value (any JSON type).", "not": { "type": "null" } },
-        "op":   { "description": "Op id — must appear in the graph's op_order. The id is the stable color/ordering key; display label for this edge is looked up in `op_labels` (falling back to the id itself).", "type": "string" }
+        "from":  { "description": "Source value (any JSON type).", "not": { "type": "null" } },
+        "to":    { "description": "Target value (any JSON type).", "not": { "type": "null" } },
+        "op":    { "description": "Op id — must appear in the graph's op_order. The id is the stable color/ordering key.", "type": "string" },
+        "label": { "description": "Display label rendered on this edge. Set per call: either the static op label or — when the op's fn returned an `OpResult(value, label=…)` with a non-None label — the per-call override. The renderer reads this field directly without consulting `op_labels`.", "type": "string" }
       }
     },
     "pseudoEdge": {
       "type": "object",
-      "required": ["from", "op"],
+      "required": ["from", "op", "label"],
       "additionalProperties": false,
       "properties": {
-        "from": { "description": "Source value (any JSON type).", "not": { "type": "null" } },
-        "op":   { "description": "Op id — must appear in the graph's op_order.", "type": "string" }
+        "from":  { "description": "Source value (any JSON type).", "not": { "type": "null" } },
+        "op":    { "description": "Op id — must appear in the graph's op_order.", "type": "string" },
+        "label": { "description": "Display label rendered on this pseudo-edge. Always the static op label: pseudo-edges are emitted *without* invoking the fn (suppressed by `Rule.bound` returning False or by `max_depth` halting expansion), so per-call OpResult overrides cannot apply here.", "type": "string" }
       }
     }
   }

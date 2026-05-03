@@ -46,7 +46,7 @@ def _bfs_neighborhood(graph, anchor, radius, direction):
     return set(distance)
 
 
-def to_dot(graph, *, op_labels=None,
+def to_dot(graph, *,
                  anchor=None, radius=None, direction="forward",
                  value_range=None,
                  op_colors=None, palette=None,
@@ -55,10 +55,14 @@ def to_dot(graph, *, op_labels=None,
                  time_limit=None, on_limit="stop"):
     """Render a graph dict (from `build`) as a Graphviz Digraph.
 
+    Edge labels come from each ``edge["label"]`` field directly — there
+    is no consultation of ``graph["op_labels"]`` here. Build-time is the
+    single point at which labels are decided (per-call via OpResult, or
+    falling back to the static op label set on the case/default).
+
     Args:
-        graph: dict with "roots", "nodes", "edges".
-        op_labels: optional {op: display_label} map. Ops not in the map fall
-            back to the generic `format_op_label` (e.g. "/2" → "÷2").
+        graph: dict with "roots", "nodes", "edges", "pseudo_edges".
+            Each edge and pseudo_edge MUST carry a ``label`` field.
         anchor, radius, direction: if `anchor` and `radius` are given, only
             nodes within `radius` BFS hops of `anchor` are rendered.
             `direction` selects how edges are followed during BFS:
@@ -106,25 +110,6 @@ def to_dot(graph, *, op_labels=None,
     """
     deadline = parse_time_limit(time_limit)
 
-    # Effective display label per op identity. Priority: user override
-    # (via to_dot's op_labels= kwarg) > graph["op_labels"] (set by
-    # build from each Op's label) > format_op_label(identity) as a
-    # last-resort cosmetic transform for legacy string-style ops.
-    user_labels = op_labels or {}
-    graph_labels = graph.get("op_labels", {})
-    effective_labels = {
-        edge["op"]: user_labels.get(
-            edge["op"],
-            graph_labels.get(edge["op"], format_op_label(edge["op"])))
-        for edge in graph["edges"]
-    }
-    for pe in graph.get("pseudo_edges", []):
-        effective_labels.setdefault(
-            pe["op"],
-            user_labels.get(
-                pe["op"],
-                graph_labels.get(pe["op"], format_op_label(pe["op"]))))
-
     keep = None
     if anchor is not None or radius is not None:
         if anchor is None or radius is None:
@@ -142,7 +127,7 @@ def to_dot(graph, *, op_labels=None,
                 "value_range ignored for graphs with non-integer node keys",
                 UserWarning, stacklevel=2)
 
-    # Each entry: (kept_node_id, op_label, kept_is_src)
+    # Each entry: (kept_node_id, op_id, edge_label, kept_is_src)
     #   kept_is_src=True  → outgoing cut (or pseudo-edge): kept_src → ghost
     #   kept_is_src=False → incoming cut: ghost → kept_dst
     cut_edges = []
@@ -151,9 +136,9 @@ def to_dot(graph, *, op_labels=None,
             src = str(edge["from"])
             dst = str(edge["to"])
             if src in keep and dst not in keep:
-                cut_edges.append((src, edge["op"], True))
+                cut_edges.append((src, edge["op"], edge["label"], True))
             elif dst in keep and src not in keep:
-                cut_edges.append((dst, edge["op"], False))
+                cut_edges.append((dst, edge["op"], edge["label"], False))
         graph = {
             "roots": graph.get("roots", []),
             "nodes": {v: info for v, info in graph["nodes"].items() if v in keep},
@@ -168,17 +153,17 @@ def to_dot(graph, *, op_labels=None,
     # Pseudo-edges (from build's bound=False outcomes) become outgoing
     # ghost stubs, sharing the cut_edges_out machinery.
     for pe in graph.get("pseudo_edges", []):
-        cut_edges.append((str(pe["from"]), pe["op"], True))
+        cut_edges.append((str(pe["from"]), pe["op"], pe["label"], True))
 
     # Outgoing cuts contribute to the kept node's fill (incoming cuts don't —
     # fill is derived from outgoing edges only).
     extra_out_ops = {}
-    for kept, op, kept_is_src in cut_edges:
+    for kept, op, _label, kept_is_src in cut_edges:
         if kept_is_src:
             extra_out_ops.setdefault(kept, set()).add(op)
 
     resolved = resolve_op_colors(graph, op_colors=op_colors, palette=palette)
-    dot = build_dot(graph, effective_labels,
+    dot = build_dot(graph,
                     show_binary=show_binary, show_factors=show_factors,
                     op_colors=op_colors, palette=palette,
                     extra_out_ops=extra_out_ops,
@@ -186,12 +171,11 @@ def to_dot(graph, *, op_labels=None,
                     node_label=node_label, node_label_attr=node_label_attr,
                     deadline=deadline, on_limit=on_limit)
 
-    for i, (kept, op, kept_is_src) in enumerate(cut_edges):
+    for i, (kept, op, edge_label, kept_is_src) in enumerate(cut_edges):
         if check_deadline(deadline, on_limit, dot, "in ghost-edge loop") is dot:
             return Dot(dot)
         direction_tag = "out" if kept_is_src else "in"
         ghost_id = f"ghost_{direction_tag}_{kept}_{i}"
-        edge_label = effective_labels.get(op, op)
         color = resolved.get(op, (_PALETTE_FALLBACK, _PALETTE_FALLBACK))[1]
         dot.node(ghost_id, label="", shape="none", width="0", height="0")
         kept_id = _node_id(kept)

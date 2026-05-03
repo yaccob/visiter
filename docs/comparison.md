@@ -49,7 +49,7 @@ What VisIter has that `NestGraph` doesn't:
   in notion of "this op applies here, that op doesn't").
 - Pseudo-edges and ghost stubs as a distinct visual primitive for
   structural cutoffs (case `bound=`, `max_depth`, render-time crop).
-- Op-label-driven stable palette (two invocations of the same rules
+- Op-identity-driven stable palette (two invocations of the same rules
   produce the same colors).
 - Wedged-pie multi-op node fills for branching nodes.
 - A JSON-schema'd pipeline that saves the data layer once and lets you
@@ -149,7 +149,7 @@ discrete reachability graphs.
 | Arbitrary hashable values as nodes                  |    ✓    |    ✓     |     ✓     |  ✓⁴   |  —   |
 | Pseudo-edges for structural cutoffs                 |    ✓    |    —     |     —     |   —   |  —   |
 | Dashed ghost stubs at boundaries                    |    ✓    |    —     |     —     |   —   |  —   |
-| Op-label-driven stable coloring                     |    ✓    |    —     |     —     |   —   |  —   |
+| Op-identity-driven stable coloring                  |    ✓    |    —     |     —     |   —   |  —   |
 | Wedged-pie fills for branching nodes                |    ✓    |    —     |     —     |   —   |  —   |
 | Anchor/radius cropping at render time               |    ✓    |    —     |    ✓⁵     |   —   |  —   |
 | JSON Schema for graph dict                          |    ✓    |    —     |     —     |   —   |  —   |

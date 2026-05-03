@@ -177,7 +177,7 @@ def test_node_label_attr_renders_attribute_as_label():
             "0": {"depth": 0, "key_type": "integer", "members": ["1", "3"]},
             "1": {"depth": 1, "key_type": "integer", "members": ["2", "4", "6"]},
         },
-        "edges": [{"from": 0, "to": 1, "op": "collapse"}],
+        "edges": [{"from": 0, "to": 1, "op": "collapse", "label": "collapse"}],
         "pseudo_edges": [],
         "op_order": ["collapse"],
     }
@@ -288,3 +288,19 @@ def test_int_features_still_work_after_generalisation():
                    "show_factors" in str(w.message) or
                    "value_range" in str(w.message) for w in caught)
     assert "digraph" in src
+
+
+def test_to_dot_renders_dynamic_per_edge_labels():
+    # Each edge can carry its own label (via OpResult); to_dot must
+    # render each edge with its individual label, not a single static
+    # one looked up by op identity.
+    from visiter import OpResult
+    g = (viter([1])
+         .case(lambda x: True,
+               lambda x: OpResult(2 * x, label=f"×2#{x}"),
+               label="×2", bound=lambda x: 2 * x <= 8)
+         .build())
+    src = to_dot(g).source
+    assert "×2#1" in src
+    assert "×2#2" in src
+    assert "×2#4" in src

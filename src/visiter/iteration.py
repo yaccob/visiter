@@ -151,6 +151,38 @@ Rule = namedtuple("Rule", ["condition", "op", "bound", "exclusive"])
 Rule.__new__.__defaults__ = (None, False)
 
 
+class OpResult(namedtuple("_OpResult", ["value", "label"])):
+    """Optional return type for ops that want a per-call edge label.
+
+    A case- or default-fn may return either:
+
+    - a plain value ``y`` — the edge to ``y`` is labeled with the
+      static label set on the case/default (the same label that ends
+      up in ``op_labels``).
+    - an ``OpResult(value, label="…")`` — the edge to ``value`` is
+      labeled with the per-call label, which can vary between calls
+      of the same op.
+
+    ``label`` is keyword-defaulted to ``None``. ``OpResult(value)`` and
+    ``OpResult(value, label=None)`` are equivalent and both fall back
+    to the static label — the explicit "I don't want to override here"
+    signal from inside an otherwise dynamic-labeling fn.
+
+    The discrimination between "plain value" and "OpResult" is done
+    by ``isinstance(result, OpResult)``, so the ``value`` field can
+    carry anything — including tuples that would be ambiguous under
+    naive 2-tuple unpacking.
+
+    Pseudo-edges (suppressed by ``Rule.bound`` returning False or by
+    ``max_depth`` halting expansion) never call the fn and therefore
+    always carry the static op label.
+    """
+    __slots__ = ()
+
+    def __new__(cls, value, label=None):
+        return super().__new__(cls, value, label)
+
+
 JSON_SCHEMA_TYPES = frozenset({
     "null", "boolean", "integer", "number", "string", "array", "object",
 })
@@ -262,6 +294,20 @@ def build(start, rules, default, *, max_depth=64,
         successor, no recursion); the renderer shows these as ghost stubs.
       - bound is None                  → treated as always True.
 
+    Each op's `func` may return either:
+      - a plain value `y` — the edge to `y` is labeled with the op's
+        static label (the same string that ends up in `op_labels[op.id]`).
+      - an `OpResult(value, label="…")` — the edge to `value` is labeled
+        with the per-call label. `label=None` (or omitted) falls back to
+        the static op label, so `OpResult` is a precise overlay rather
+        than an all-or-nothing switch.
+
+    The discrimination is by `isinstance(result, OpResult)`, so the value
+    field in `OpResult` may itself be a tuple, frozenset, or any custom
+    object — there is no risk of misreading a 2-tuple value as
+    `(value, label)`. Pseudo-edges (from `bound=False` or `max_depth`)
+    do not invoke `func` and therefore always carry the static label.
+
     `default` is required. Pass `None` to signal explicitly that a value
     for which no rule matches is a leaf (no outgoing edge). Pass `Op(...)`
     to fire that op as the else branch — useful for binary mutually
@@ -311,11 +357,16 @@ def build(start, rules, default, *, max_depth=64,
             "schema_version": "1",
             "roots": [int, ...],
             "nodes": {str(value): {"depth": int, "tags"?: [str, ...]}, ...},
-            "edges": [{"from": A, "to": B, "op": op_id}, ...],
-            "pseudo_edges": [{"from": A, "op": op_id}, ...],
+            "edges": [{"from": A, "to": B, "op": op_id, "label": str}, ...],
+            "pseudo_edges": [{"from": A, "op": op_id, "label": str}, ...],
             "op_order": [str, ...],          # distinct op ids, rule-then-default order
-            "op_labels": {op_id: label, ...}  # display label per op id
+            "op_labels": {op_id: label, ...}  # static op-level label metadata
         }
+
+        Every edge and pseudo-edge carries a `label` field, computed at
+        build time. Renderers read it directly — `op_labels` is purely
+        op-level metadata (provenance, palette legends) and is not
+        consulted for edge beschriftung.
 
         The returned Graph supports fluent chaining::
 
@@ -405,16 +456,18 @@ def build(start, rules, default, *, max_depth=64,
             info["tags"] = node_tags
         return info
 
-    def add_edge(a, b, op):
+    def add_edge(a, b, op_id, label):
         key = (str(a), str(b))
         if key not in seen_edges:
-            graph["edges"].append({"from": str(a), "to": str(b), "op": op})
+            graph["edges"].append({"from": str(a), "to": str(b),
+                                   "op": op_id, "label": label})
             seen_edges.add(key)
 
-    def add_pseudo(x, label):
-        key = (str(x), label)
+    def add_pseudo(x, op_id, label):
+        key = (str(x), op_id)
         if key not in seen_pseudo:
-            graph["pseudo_edges"].append({"from": str(x), "op": label})
+            graph["pseudo_edges"].append({"from": str(x),
+                                          "op": op_id, "label": label})
             seen_pseudo.add(key)
 
     def limit_reason():
@@ -440,8 +493,20 @@ def build(start, rules, default, *, max_depth=64,
 
         `done` is non-None iff the iteration should abort with that graph.
         `nxt_if_new` is the successor value if newly created, else None.
+
+        ``op.func(x)`` may return either a plain value or an
+        ``OpResult(value, label=…)``. In the OpResult case a non-None
+        ``label`` overrides the static ``op.label`` for this one edge;
+        ``label=None`` falls back to the static label, same as a plain
+        return.
         """
-        nxt = op.func(x)
+        result = op.func(x)
+        if isinstance(result, OpResult):
+            nxt = result.value
+            edge_label = result.label if result.label is not None else op.label
+        else:
+            nxt = result
+            edge_label = op.label
         new_node = str(nxt) not in graph["nodes"]
         if new_node:
             reason = limit_reason()
@@ -450,7 +515,7 @@ def build(start, rules, default, *, max_depth=64,
                 if result is not None:
                     return result, None
             graph["nodes"][str(nxt)] = make_node(nxt, next_depth)
-        add_edge(x, nxt, op.id)
+        add_edge(x, nxt, op.id, edge_label)
         return None, (nxt if new_node else None)
 
     frontier = []
@@ -479,7 +544,7 @@ def build(start, rules, default, *, max_depth=64,
                     continue
                 any_matched = True
                 if at_max or (rule.bound is not None and not rule.bound(x)):
-                    add_pseudo(x, rule.op.id)
+                    add_pseudo(x, rule.op.id, rule.op.label)
                     if rule.exclusive:
                         break
                     continue
@@ -492,7 +557,7 @@ def build(start, rules, default, *, max_depth=64,
                     break
             if not any_matched and default is not None:
                 if at_max:
-                    add_pseudo(x, default.id)
+                    add_pseudo(x, default.id, default.label)
                 else:
                     done, nxt = fire(x, default, depth + 1)
                     if done is not None:

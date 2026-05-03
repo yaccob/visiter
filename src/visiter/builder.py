@@ -63,10 +63,17 @@ class Builder:
         """Add a guarded case to the chain.
 
         `condition(x)` decides applicability; `fn(x)` produces the
-        successor value. If the case matches and `exclusive=True`, later
-        cases and the default are skipped for that x. `bound(x)` (optional)
-        separates "op applies" from "stop here anyway" — a False bound
-        records a pseudo-edge instead of a real successor.
+        successor — either a plain value, or an
+        ``OpResult(value, label=…)`` to override this case's static
+        ``label`` for that one edge. If the case matches and
+        ``exclusive=True``, later cases and the default are skipped for
+        that x. `bound(x)` (optional) separates "op applies" from "stop
+        here anyway" — a False bound records a pseudo-edge instead of a
+        real successor.
+
+        `label` is the case's static edge label. It is the value that
+        ends up on every edge produced by this case unless ``fn``
+        returns an ``OpResult`` with a non-None label.
 
         `exclusive=None` (the default) lets the chain-level `match=` mode
         decide: Match.ALL → not exclusive, Match.FIRST → exclusive. An
@@ -96,6 +103,12 @@ class Builder:
 
     def default(self, fn=None, *, label=None, id=None):
         """Set the fallback op (fires only when no case matched).
+
+        Behaves identically to ``case`` regarding the return value of
+        ``fn``: a plain value uses the static ``label``; an
+        ``OpResult(value, label=…)`` overrides per call. ``default`` is
+        not a "failure" branch — it is just the case without an explicit
+        condition.
 
         Calling .default() more than once raises RuntimeError — the
         fallback is a singleton. `fn=None` (also the omitted-call state)

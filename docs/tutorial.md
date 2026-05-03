@@ -110,6 +110,39 @@ labels differ, and pins you set via `op_colors` don't break when you
 later rename a label. Set `id=` explicitly when you want a stable,
 short key for pinning.
 
+### Per-call labels via `OpResult`
+
+The `label=` argument sets the *static* label — the same string on
+every edge produced by that case. When you want the label to vary per
+call (e.g. annotate a Collatz step with how many bits got dropped, or
+tag a graph-search edge with the cost it carried), have the function
+return `OpResult(value, label=…)` instead of a plain value:
+
+```python
+from visiter import OpResult, viter
+
+def odd_step(x):
+    increased = 3 * x + 1
+    div = (increased & -increased).bit_length() - 1
+    return OpResult(increased >> div, label=f"3x+1, ÷2×{div}")
+
+(viter([27])
+ .case(lambda x: x % 2 == 0, lambda x: x // 2, label="÷2")
+ .default(odd_step, label="3x+1")
+ .build())
+```
+
+Returning a plain value is unchanged — you only opt into `OpResult`
+where you actually want a per-call label. `OpResult(value)` and
+`OpResult(value, label=None)` are equivalent and fall back to the
+static label, so a partially-dynamic `fn` can opt out per call without
+switching its return shape. The discrimination is by `isinstance`, so
+the `value` field can carry a tuple, frozenset, or custom object —
+no risk of misreading a 2-tuple value as `(value, label)`.
+
+Pseudo-edges (suppressed by `bound=False` or `max_depth`) never invoke
+`fn`, so they always carry the static label.
+
 ---
 
 ## What happens when no case applies?

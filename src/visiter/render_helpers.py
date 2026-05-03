@@ -228,7 +228,7 @@ def node_attrs(vstr, out_op_colors, hl=False, show_binary=False,
     return attrs
 
 
-def build_dot(graph, op_labels,
+def build_dot(graph,
               show_binary=False, show_factors=False,
               op_colors=None, palette=None, extra_out_ops=None,
               resolved=None,
@@ -236,11 +236,13 @@ def build_dot(graph, op_labels,
               node_label=None, node_label_attr=None):
     """Build a Graphviz Digraph from a graph dict.
 
-    Edges are colored by operation label via `resolve_op_colors`. Nodes are
-    filled from their outgoing edges (wedged for branches).
+    Edges are colored by operation identity via `resolve_op_colors` and
+    labeled directly from each ``edge["label"]`` field — no
+    ``op_labels`` lookup. Nodes are filled from their outgoing edges
+    (wedged for branches).
 
-    `extra_out_ops` is an optional {node_id: set[op_label]} map of
-    additional outgoing op labels per node — used by callers that crop the
+    `extra_out_ops` is an optional {node_id: set[op_id]} map of
+    additional outgoing op ids per node — used by callers that crop the
     graph but still want the kept nodes' fill to reflect ops on edges that
     leave the kept region (otherwise those nodes would appear unfilled).
 
@@ -325,10 +327,8 @@ def build_dot(graph, op_labels,
             return dot
         src = _node_id(str(edge["from"]))
         dst = _node_id(str(edge["to"]))
-        op = edge["op"]
-        label = op_labels.get(op, op)
-        color = resolved.get(op, fallback)[1]
-        dot.edge(src, dst, label=f" {label} ",
+        color = resolved.get(edge["op"], fallback)[1]
+        dot.edge(src, dst, label=f" {edge['label']} ",
                  color=color, fontcolor=color)
 
     return dot

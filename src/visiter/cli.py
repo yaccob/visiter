@@ -37,6 +37,7 @@ def _build_namespace(vit_path):
     from .filters import NxFilter
     from .graph import Graph
     from .io import write
+    from .iteration import OpResult
     from .to_dot import to_dot
 
     return {
@@ -46,6 +47,7 @@ def _build_namespace(vit_path):
         "viter": viter,
         "Match": Match,
         "OnLimit": OnLimit,
+        "OpResult": OpResult,
         "to_dot": to_dot,
         "Graph": Graph,
         # Filters

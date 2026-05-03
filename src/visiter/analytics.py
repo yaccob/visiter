@@ -94,10 +94,11 @@ def to_networkx(graph):
         # Preserve the raw endpoint values so from_networkx can round-
         # trip integer endpoints back to integers (node ids themselves
         # must be strings to align with the graph dict's str(value)
-        # keying).
+        # keying). Carry the per-edge `label` through verbatim so the
+        # round-trip preserves OpResult overrides.
         g.add_edge(
             str(edge["from"]), str(edge["to"]),
-            op=edge["op"],
+            op=edge["op"], label=edge["label"],
             _raw_from=edge["from"], _raw_to=edge["to"],
         )
 
@@ -147,6 +148,7 @@ def from_networkx(g):
     edges = []
     seen_ops = list(g.graph.get("op_order", []))
     seen_ops_set = set(seen_ops)
+    op_labels = dict(g.graph.get("op_labels", {}))
     for u, v, attrs in g.edges(data=True):
         op = attrs.get("op", "")
         # Restore original endpoint types if they were stashed by
@@ -154,7 +156,12 @@ def from_networkx(g):
         # honest fallback.
         frm = attrs["_raw_from"] if "_raw_from" in attrs else str(u)
         to_ = attrs["_raw_to"] if "_raw_to" in attrs else str(v)
-        edges.append({"from": frm, "to": to_, "op": op})
+        # Schema requires `label` on every edge. Prefer the carried-
+        # through attribute (visiter-origin), then op_labels[op] (a
+        # preserved op metadata map from a sibling visiter graph), then
+        # the op id itself as the honest last resort for bare NX graphs.
+        label = attrs.get("label", op_labels.get(op, op))
+        edges.append({"from": frm, "to": to_, "op": op, "label": label})
         if op not in seen_ops_set:
             seen_ops_set.add(op)
             seen_ops.append(op)
