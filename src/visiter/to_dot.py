@@ -11,14 +11,26 @@ from .render_helpers import (build_dot, check_deadline, format_op_label,
 def _bfs_neighborhood(graph, anchor, radius, direction):
     """Return the set of node ids within `radius` BFS hops of `anchor`.
 
+    `anchor` may be a single node value or an iterable (list/tuple/set)
+    of node values. With several anchors the result is the union of each
+    anchor's `radius`-hop neighborhood: a multi-source BFS where every
+    node's distance is the minimum hop count to *any* anchor, and the
+    same `radius` bounds them all.
+
     direction:
         "forward"  — follow edges in their native direction (src → dst)
         "backward" — follow edges in reverse (dst → src)
         "both"     — undirected (treat each edge as bidirectional)
     """
-    anchor = str(anchor)
-    if anchor not in graph["nodes"]:
-        raise ValueError(f"anchor {anchor!r} is not a node in the graph")
+    if isinstance(anchor, (list, tuple, set)):
+        anchors = [str(a) for a in anchor]
+    else:
+        anchors = [str(anchor)]
+    if not anchors:
+        raise ValueError("anchor must name at least one node")
+    for a in anchors:
+        if a not in graph["nodes"]:
+            raise ValueError(f"anchor {a!r} is not a node in the graph")
     if direction not in ("forward", "backward", "both"):
         raise ValueError(f"direction must be 'forward', 'backward', or 'both'; "
                          f"got {direction!r}")
@@ -31,8 +43,8 @@ def _bfs_neighborhood(graph, anchor, radius, direction):
         if direction in ("backward", "both"):
             neighbors[dst].append(src)
 
-    distance = {anchor: 0}
-    frontier = [anchor]
+    distance = {a: 0 for a in anchors}
+    frontier = list(distance)
     while frontier:
         nxt = []
         for v in frontier:
@@ -47,7 +59,8 @@ def _bfs_neighborhood(graph, anchor, radius, direction):
 
 
 def to_dot(graph, *,
-                 anchor=None, radius=None, direction="forward",
+                 anchor=None, radius=None, direction="both",
+                 max_depth=None,
                  value_range=None,
                  op_colors=None, palette=None,
                  show_binary=False, show_factors=False,
@@ -65,15 +78,30 @@ def to_dot(graph, *,
             Each edge and pseudo_edge MUST carry a ``label`` field.
         anchor, radius, direction: if `anchor` and `radius` are given, only
             nodes within `radius` BFS hops of `anchor` are rendered.
+            `anchor` may be a single node value or a list/tuple/set of
+            node values; with several anchors the rendered set is the
+            union of their `radius`-hop neighborhoods (all share the same
+            `radius`).
             `direction` selects how edges are followed during BFS:
-              "forward"  — along edges (src → dst); default. Matches
-                           the "show me the orbit from x" reading that
+              "forward"  — along edges (src → dst). Matches the
+                           "show me the orbit from x" reading that
                            aligns with the iteration's own direction.
               "backward" — against edges. Matches the "show me what
                            reaches this anchor" reading (natural when
                            anchoring on a sink or fixed point).
-              "both"     — undirected neighborhood.
-            `anchor` is a node value as it appears in graph["nodes"] keys.
+              "both"     — undirected neighborhood; default. Shows the
+                           full local context around the anchor(s),
+                           irrespective of edge orientation.
+            Anchor values are matched as they appear in graph["nodes"]
+            keys (compared by their string form).
+        max_depth: optional int; render-time depth crop measured from the
+            graph's root nodes outward along edges (forward direction).
+            Only nodes within `max_depth` hops of a root are kept; deeper
+            nodes are dropped and the edges crossing the cut become dashed
+            ghost stubs, exactly like the anchor/radius crop. This is a
+            display-only crop, distinct from build-time `max_depth` (which
+            caps BFS expansion during construction). Combines with
+            anchor/radius and value_range by intersection.
         value_range: optional (low, high) int tuple; only nodes with integer
             value in [low, high] are rendered. Combines with anchor/radius
             by intersection.
@@ -126,6 +154,19 @@ def to_dot(graph, *,
             warnings.warn(
                 "value_range ignored for graphs with non-integer node keys",
                 UserWarning, stacklevel=2)
+    if max_depth is not None:
+        # Depth from the root(s) outward, following edges in their native
+        # direction — a multi-source forward BFS seeded at the roots. Reuses
+        # the anchor machinery so the boundary cut yields ghost stubs too.
+        roots = [str(r) for r in graph.get("roots", [])
+                 if str(r) in graph["nodes"]]
+        if roots:
+            depth_set = _bfs_neighborhood(graph, roots, max_depth, "forward")
+            keep = depth_set if keep is None else keep & depth_set
+        else:
+            warnings.warn(
+                "max_depth ignored: graph has no root nodes to measure "
+                "depth from", UserWarning, stacklevel=2)
 
     # Each entry: (kept_node_id, op_id, edge_label, kept_is_src)
     #   kept_is_src=True  → outgoing cut (or pseudo-edge): kept_src → ghost

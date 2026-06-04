@@ -249,7 +249,8 @@ graph = (viter(range(1, 30),
 
 ```python
 to_dot(graph, *,
-             anchor=None, radius=None, direction="forward",
+             anchor=None, radius=None, direction="both",
+             max_depth=None,
              value_range=None,
              op_colors=None, palette=None,
              show_binary=False, show_factors=False,
@@ -270,12 +271,24 @@ around a `graphviz.Digraph` with `.source`, `.render(format, file)`,
   `OpResult`, or per-case via the static `label=` argument on
   `.case()` / `.default()`).
 - `anchor`, `radius`, `direction`: BFS neighborhood crop. Only nodes
-  within `radius` hops of `anchor` are rendered. `direction` ∈
-  `{"forward", "backward", "both"}`. Default `"forward"` — walks
-  edges in their iteration direction and answers "what does the orbit
-  from `anchor` look like?". Use `"backward"` to answer "what reaches
-  `anchor`?" (natural when the anchor is a sink or fixed point), and
-  `"both"` for an undirected neighborhood.
+  within `radius` hops of `anchor` are rendered. `anchor` may be a
+  single node value or a list/tuple/set of node values — with several
+  anchors the kept set is the union of their `radius`-hop neighborhoods,
+  all sharing the same `radius`. `direction` ∈
+  `{"forward", "backward", "both"}`. Default `"both"` — an undirected
+  neighborhood that shows the full local context around the anchor(s).
+  Use `"forward"` to walk edges in their iteration direction ("what
+  does the orbit from `anchor` look like?") and `"backward"` to answer
+  "what reaches `anchor`?" (natural when the anchor is a sink or fixed
+  point).
+- `max_depth`: optional int. Render-time depth crop measured from the
+  graph's root nodes outward along edges (forward). Only nodes within
+  `max_depth` hops of a root survive; deeper nodes are dropped and the
+  edges crossing the cut become dashed ghost stubs, just like the
+  anchor/radius crop. This is a **display-only** crop, distinct from the
+  build-time `max_depth` on `viter(...)` (which caps BFS expansion during
+  construction). Combines with anchor/radius and value_range by
+  intersection.
 - `value_range`: `(low, high)` int tuple. Combines with anchor/radius
   by intersection.
 - `op_colors`: optional `{op_id: color}` map. Each value may be a
@@ -358,8 +371,10 @@ the cropped-out parent:
 ### `value_range` and trees
 
 For tree-shaped graphs (e.g., the reverse binary tree from a single
-root), `anchor=root, radius=N, direction="forward"` (the default) is
-the natural way to show the top N levels.
+root), `max_depth=N` is the natural way to show the top N levels — it
+crops from the root(s) outward without having to name the root as an
+anchor. Equivalently, `anchor=root, radius=N, direction="forward"`
+gives the same result when you want to pin a specific root.
 
 For forward-iteration graphs with a sink (cycle),
 `anchor=cycle_node, radius=N, direction="backward"` shows the N

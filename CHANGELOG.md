@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [0.14.0] — 2026-06-04
+
+### Breaking
+- **Default crop `direction` changed from `"forward"` to `"both"`.**
+  `to_dot(anchor=…, radius=…)` without an explicit `direction` now walks
+  edges undirected, showing the full local context around the anchor.
+  Callers that relied on the forward-only default must pass
+  `direction="forward"` explicitly.
+
+### Added
+- **`to_dot(anchor=…)` accepts a list/tuple/set of node values.** With
+  several anchors the rendered set is the union of their `radius`-hop
+  neighborhoods, all bounded by the same `radius` (multi-source BFS).
+  A single value keeps working unchanged.
+- **`to_dot(max_depth=N)`** — render-time depth crop measured from the
+  graph's root nodes outward (forward). Keeps nodes within `N` hops of a
+  root; deeper nodes are dropped and the cut edges become dashed ghost
+  stubs, like the anchor/radius crop. Distinct from the build-time
+  `max_depth` on `viter(...)`, and combines with anchor/radius and
+  value_range by intersection.
+
+---
+
 ## [0.13.0] — 2026-05-03
 
 ### Breaking

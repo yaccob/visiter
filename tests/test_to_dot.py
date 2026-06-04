@@ -58,6 +58,103 @@ def test_anchor_radius_crops_graph():
     assert big_nodes > small_nodes
 
 
+def _kept_nodes(src):
+    import re
+    # Value nodes only (n<digits>); ghost stubs are named ghost_*.
+    return set(re.findall(r"^\t(n\d+) \[", src, re.MULTILINE))
+
+
+def test_anchor_list_is_union_of_single_anchor_neighborhoods():
+    g = make_descent_graph()
+    only_1 = _kept_nodes(to_dot(g, anchor=1, radius=2,
+                                direction="backward").source)
+    only_7 = _kept_nodes(to_dot(g, anchor=7, radius=2,
+                                direction="backward").source)
+    both = _kept_nodes(to_dot(g, anchor=[1, 7], radius=2,
+                              direction="backward").source)
+    # Same radius bounds every anchor; the kept set is exactly the union.
+    assert both == only_1 | only_7
+    assert both >= only_1 and both >= only_7
+
+
+def test_anchor_list_rejects_unknown_member():
+    import pytest
+    g = make_descent_graph()
+    with pytest.raises(ValueError, match="not a node"):
+        to_dot(g, anchor=[1, 999], radius=2, direction="backward")
+
+
+def test_anchor_empty_list_rejected():
+    import pytest
+    g = make_descent_graph()
+    with pytest.raises(ValueError, match="at least one node"):
+        to_dot(g, anchor=[], radius=2, direction="backward")
+
+
+def make_binary_tree(build_depth=4):
+    # Single root 1; every node spawns 2x and 2x+1 → a perfect binary tree
+    # of value nodes. Render-time max_depth=d keeps 2**(d+1)-1 of them.
+    return (viter([1], max_depth=build_depth)
+            .case(lambda x: True, lambda x: 2 * x, label="×2")
+            .case(lambda x: True, lambda x: 2 * x + 1, label="×2+1")
+            .build())
+
+
+def test_max_depth_crops_from_root():
+    g = make_binary_tree(build_depth=4)
+    for d in range(4):
+        kept = _kept_nodes(to_dot(g, max_depth=d).source)
+        # Perfect binary tree: levels 0..d give 2**(d+1)-1 value nodes.
+        assert len(kept) == 2 ** (d + 1) - 1
+
+
+def test_max_depth_matches_stored_depth_field():
+    # The render-time crop (forward BFS from roots) must keep exactly the
+    # nodes whose build-time `depth` field is ≤ max_depth — both measure
+    # forward hop-distance from the roots, so on a freshly built graph the
+    # two agree node-for-node.
+    g = make_binary_tree(build_depth=4)
+    for d in range(4):
+        kept = _kept_nodes(to_dot(g, max_depth=d).source)
+        within_depth = sum(1 for info in g["nodes"].values()
+                           if info["depth"] <= d)
+        assert len(kept) == within_depth
+
+
+def test_max_depth_emits_ghost_stubs_at_boundary():
+    g = make_binary_tree(build_depth=4)
+    # Cropping below the built depth must leave dashed stubs at the cut.
+    src = to_dot(g, max_depth=1).source
+    assert "ghost_out_" in src
+
+
+def test_max_depth_zero_keeps_only_roots():
+    g = make_binary_tree(build_depth=3)
+    kept = _kept_nodes(to_dot(g, max_depth=0).source)
+    assert len(kept) == 1   # just the single root
+
+
+def test_max_depth_intersects_with_anchor_radius():
+    g = make_binary_tree(build_depth=4)
+    only_depth = _kept_nodes(to_dot(g, max_depth=3).source)
+    combined = _kept_nodes(
+        to_dot(g, max_depth=3, anchor=1, radius=1, direction="forward").source)
+    # Intersection can only shrink the kept set, never grow it.
+    assert combined <= only_depth
+    assert len(combined) == 3   # root + its 2 forward children within radius 1
+
+
+def test_direction_defaults_to_both():
+    # With the anchor inside a cycle, "both" includes predecessors that a
+    # pure-forward crop would miss — proving the default is no longer forward.
+    g = make_descent_graph()
+    default_crop = _kept_nodes(to_dot(g, anchor=1, radius=2).source)
+    forward_crop = _kept_nodes(
+        to_dot(g, anchor=1, radius=2, direction="forward").source)
+    assert default_crop >= forward_crop
+    assert default_crop != forward_crop
+
+
 def test_pseudo_edges_become_ghost_stubs():
     # Bound-stopped graph: 1→2→4→8→(pseudo)16.
     g = (viter([1])

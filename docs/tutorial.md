@@ -242,8 +242,9 @@ node with two incoming edges, not a duplicate:
 
 ## How do I show only a slice of a big graph?
 
-Render-time cropping. `.to_dot()` takes `anchor` (a node value) plus
-`radius` (BFS hop count) and an optional `direction`:
+Render-time cropping. `.to_dot()` takes `anchor` (a node value, or a
+list of them) plus `radius` (BFS hop count) and an optional
+`direction`:
 
 ```python
 (viter(range(1, 30))
@@ -259,12 +260,32 @@ This says: keep nodes within 2 hops of node 1, walking edges
 edges that leave the kept region are drawn as dashed ghost stubs —
 same vocabulary as the bound/max_depth boundary.
 
-`direction="forward"` (the default) is the natural choice for
-tree-shaped graphs expanded from a root; `"backward"` is natural for
-graphs with a sink/cycle you want to inspect. `"both"` walks edges
-undirected — meaningful only for graphs that fan out (multiple
-outgoing ops per node); on a deterministic 1-out graph it collapses
-to backward.
+`direction="both"` (the default) walks edges undirected and shows the
+full local context around the anchor. `"forward"` is the natural choice
+for tree-shaped graphs expanded from a root (follow the iteration's own
+direction); `"backward"` is natural for graphs with a sink/cycle whose
+pre-image you want to inspect. On a deterministic 1-out graph, `"both"`
+collapses to `"backward"` (forward adds only the single onward step).
+
+To pass a list, `anchor=[1, 7]` keeps the union of both neighborhoods,
+each bounded by the same `radius`.
+
+For the common "top N levels from the root" crop there is a dedicated
+`max_depth=N` — it measures depth from the root(s) outward, so you don't
+have to name the root as an anchor:
+
+```python
+(viter([1], max_depth=10)
+ .case(lambda x: True, lambda x: 2 * x)
+ .case(lambda x: True, lambda x: 2 * x + 1)
+ .build()
+ .to_dot(max_depth=3)   # render only the top 3 levels; deeper → ghost stubs
+ .render())
+```
+
+Note the two `max_depth` are different layers: the one on `viter(...)`
+caps how deep the graph is *built*; the one on `.to_dot(...)` only crops
+what is *rendered*.
 
 The descent graph (`range(1, 30)` under %3-else-+2) from anchor 1,
 radius 8, is a small orbit forward but a whole pre-image tree
