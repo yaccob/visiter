@@ -1,0 +1,16 @@
+#!/usr/bin/env viter
+# Nim (matchstick game), 10 on the table, take 1-3 — same graph as
+# basics/nim.vit, but the case callbacks are inline *Rust expressions*
+# (lang="rust"), compiled on the fly with rustc and run natively.
+#
+# In lang="rust" mode, .case()/.default() take Rust expression strings instead
+# of Python lambdas; the current value is bound to `s`, and the expression is
+# also the edge label/id when none is given. Requires rustc on PATH.
+#
+# Usage:
+#   viter demos/rust/nim.vit
+(viter(10, lang="rust")
+ .case("s >= 1", "s - 1", label="take 1")
+ .case("s >= 2", "s - 2", label="take 2")
+ .case("s >= 3", "s - 3", label="take 3")
+ .render())

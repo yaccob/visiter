@@ -29,6 +29,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   pseudo_edges)` pyarrow Tables for analytics. Requires the optional
   `[storage]` extra (pyarrow); JSON stays the default human-readable format.
   Round-trip fidelity matches JSON (node keys are `str(value)`).
+- **Inline Rust-expression callbacks (`viter(..., lang="rust")`).** With
+  `lang="rust"`, `.case()` / `.default()` take Rust expression *strings* (the
+  current value is bound to `s`) instead of Python lambdas; they are co-located
+  at the call site, compiled on the fly with `rustc` (cached on a source hash),
+  and run natively. `consts={"N": ...}` injects i64 constants; the expression is
+  the edge label/id when none is given. Produces a Graph byte-identical to the
+  Python-lambda build. Requires `rustc` on PATH (no Python fallback for Rust
+  source). v1 supports int or tuple-of-int state values and unbounded builds
+  only. See `demos/rust/`.
 
 ---
 

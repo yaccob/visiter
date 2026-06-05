@@ -1,0 +1,20 @@
+#!/usr/bin/env viter
+# Water-jug reachability with inline Rust callbacks (lang="rust"). Two jugs of
+# capacity A=3 and B=5; state is the tuple (a, b) bound to `s` (so `s.0`, `s.1`
+# in the Rust expressions). Constants are injected via consts=. Compiled on the
+# fly with rustc and run natively.
+#
+# Usage:
+#   viter demos/rust/water_jugs.vit
+(viter([(0, 0)], lang="rust", consts={"A": 3, "B": 5})
+ .case("s.0 < A", "(A, s.1)",                              label="fill A")
+ .case("s.1 < B", "(s.0, B)",                              label="fill B")
+ .case("s.0 > 0", "(0, s.1)",                              label="empty A")
+ .case("s.1 > 0", "(s.0, 0)",                              label="empty B")
+ .case("s.0 > 0 && s.1 < B",
+       "(std::cmp::max(0, s.0 - (B - s.1)), std::cmp::min(B, s.0 + s.1))",
+       label="A->B")
+ .case("s.1 > 0 && s.0 < A",
+       "(std::cmp::min(A, s.0 + s.1), std::cmp::max(0, s.1 - (A - s.0)))",
+       label="B->A")
+ .render())
