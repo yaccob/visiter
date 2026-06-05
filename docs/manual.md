@@ -1063,17 +1063,23 @@ Constants are injected with `consts=` (i64), and tuple state uses `s.0`, `s.1`:
  .render())
 ```
 
-Requirements and v1 scope:
+`lang="rust"` is a **drop-in**: the same chain yields the same graph as the
+Python path, byte-for-byte. Requirements and scope:
 
 - **`rustc` must be on `PATH`** (install via <https://rustup.rs>). There is no
   Python fallback for Rust source — use `lang="python"` in toolchain-less
   environments. The first build per unique source pays a compile cost; later
   builds hit the cache.
-- **State values:** `int` or `tuple`-of-`int` (arity ≥ 2), inferred from the
-  start values. Node keys match Python's `str()` exactly.
-- **Unbounded only:** `max_depth` / `max_nodes` / `time_limit` / `bound` are
-  rejected. `Match.ALL` / `Match.FIRST` and `default` are supported; `tags` and
-  `OpResult` are not yet.
+- **State values:** `int`, `tuple`-of-`int` (arity ≥ 2), or `str`, inferred
+  from the start values. Node keys match Python's `str()` exactly.
+- **Full behavioral parity:** `max_depth` and `max_nodes` apply with the same
+  defaults as the Python path (64 / 1024) and produce the same ghost-stub
+  pseudo-edges; `bound=` predicates (also Rust strings), `tags=` (Rust-string
+  predicates), `key_type=`, `Match.ALL`/`Match.FIRST`, `default`, and
+  `on_limit` all behave identically.
+- **Not yet supported — raises, never diverges silently:** `time_limit`,
+  `OpResult` per-call labels, and heterogeneous value types (rustc rejects
+  type mixing). `Fraction`/`Decimal` values stay Python-only.
 - Runnable examples: [`demos/rust/`](../demos/rust/).
 
 ### Columnar storage — `.vitgraph` (the `[storage]` extra)

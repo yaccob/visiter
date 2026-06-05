@@ -1,0 +1,19 @@
+#!/usr/bin/env viter
+# String state values with lang="rust" (Path B). The value is bound to `s`
+# (an &str); the op returns a new String. Here: grow a string of 'a's, and
+# branch by appending 'b' once it is long enough — a tiny illustration that
+# Path B handles str states, not just numbers, with the usual default bounds
+# and ghost stubs at the frontier.
+#
+# Complex string callbacks (e.g. tic-tac-toe-style canonicalization) are
+# expressible too, as Rust block expressions — `"{ let mut v = ...; v }"` —
+# though they get long inline.
+#
+# Usage:
+#   viter demos/rust/strings.vit
+# Note: a single string is one start value only when wrapped in a list —
+# viter("ab") would iterate the characters, like any non-int iterable.
+(viter([""], lang="rust", max_depth=4)
+ .case("s.len() < 3", 's.to_string() + "a"',  label="+a")
+ .case("s.len() >= 1 && s.len() < 3", 's.to_string() + "b"', label="+b")
+ .render())

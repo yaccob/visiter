@@ -34,10 +34,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   current value is bound to `s`) instead of Python lambdas; they are co-located
   at the call site, compiled on the fly with `rustc` (cached on a source hash),
   and run natively. `consts={"N": ...}` injects i64 constants; the expression is
-  the edge label/id when none is given. Produces a Graph byte-identical to the
-  Python-lambda build. Requires `rustc` on PATH (no Python fallback for Rust
-  source). v1 supports int or tuple-of-int state values and unbounded builds
-  only. See `demos/rust/`.
+  the edge label/id when none is given. A **drop-in** for the Python path: the
+  same chain yields the same graph, byte-for-byte — including default bounds
+  (`max_depth=64` / `max_nodes=1024`), ghost-stub pseudo-edges, `bound=` and
+  `tags=` (also Rust strings), and `key_type=`. State values may be `int`,
+  `tuple`-of-`int`, or `str`. Requires `rustc` on PATH (no Python fallback for
+  Rust source); `time_limit` and `OpResult` are not supported and raise rather
+  than diverge. See `demos/rust/`.
 
 ---
 

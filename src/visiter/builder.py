@@ -152,19 +152,26 @@ class Builder:
     def _build_rust(self, default_exclusive):
         """Path B: compile the Rust-string cases and run the native BFS.
 
-        ``.case()`` / ``.default()`` carried Rust expression strings (value
-        bound to ``s``). v1 supports unbounded builds only.
+        ``.case()`` / ``.default()`` / ``bound=`` / ``tags=`` carried Rust
+        expression strings (value bound to ``s``). Defaults and bounds match the
+        Python path exactly (``max_depth=64``, ``max_nodes=1024``), including
+        ghost-stub pseudo-edges. ``time_limit`` and ``OpResult`` are not yet
+        supported and raise rather than diverging silently.
         """
+        from .builder import OnLimit
         from .rustgen import build_rust
 
-        for key in ("max_depth", "max_nodes", "time_limit"):
-            if self._options.get(key) is not None:
-                raise ValueError(
-                    f"lang='rust' (v1) supports unbounded builds only; "
-                    f"remove {key}= (or pass {key}=None) or use lang='python'")
-        if any(c.bound is not None for c in self._cases):
+        if self._options.get("time_limit") is not None:
             raise ValueError(
-                "lang='rust' (v1) does not support bound=; use lang='python'")
+                "lang='rust' does not support time_limit= yet; use "
+                "lang='python' or remove it")
+
+        # Same defaults as iteration.build, so the rust path is a drop-in.
+        max_depth = self._options.get("max_depth", 64)
+        max_nodes = self._options.get("max_nodes", 1024)
+        on_limit = self._options.get("on_limit", "stop")
+        if isinstance(on_limit, OnLimit):
+            on_limit = on_limit.value
 
         starts = ([self._iterable] if isinstance(self._iterable, int)
                   else list(self._iterable))
@@ -172,7 +179,8 @@ class Builder:
         for c in self._cases:
             eff_exclusive = (default_exclusive if c.exclusive is None
                              else c.exclusive)
-            cases.append((c.condition, c.fn, c.label, c.id, eff_exclusive))
+            cases.append((c.condition, c.fn, c.label, c.id, c.bound,
+                          eff_exclusive))
         default = None
         if self._default is not _UNSET and self._default.fn is not None:
             d = self._default
@@ -180,7 +188,10 @@ class Builder:
 
         return build_rust(starts, cases, default,
                           consts=self._options.get("consts"),
-                          key_type=self._options.get("key_type"))
+                          key_type=self._options.get("key_type"),
+                          tags=self._options.get("tags"),
+                          max_depth=max_depth, max_nodes=max_nodes,
+                          on_limit=on_limit)
 
     def render(self, format="svg", file=None):
         """One-shot shortcut: build, convert to Dot, render.
@@ -206,11 +217,13 @@ def viter(iterable, *, match=Match.ALL, **options):
     produces a byte-identical Graph — pure Python is always available.
 
     `lang="rust"` (Path B) switches the chain to inline Rust-expression
-    callbacks: `.case()` / `.default()` then take Rust expression *strings*
-    (the current value is bound to `s`) which are compiled on the fly with
-    `rustc` and run natively. `consts={"N": ...}` injects i64 constants the
-    expressions can reference. Requires `rustc` on PATH; v1 supports int or
-    tuple-of-int state values and unbounded builds only.
+    callbacks: `.case()` / `.default()` / `bound=` / `tags=` then take Rust
+    expression *strings* (the current value is bound to `s`) which are compiled
+    on the fly with `rustc` and run natively. `consts={"N": ...}` injects i64
+    constants the expressions can reference. It is a drop-in — same chain, same
+    graph (bounds, ghost stubs, tags and all). Requires `rustc` on PATH;
+    supports int/tuple-of-int/str state values; `time_limit` and `OpResult` are
+    not supported (they raise rather than diverge).
     """
     opts = dict(options)
     opts["match"] = match
