@@ -1009,10 +1009,12 @@ independent native paths, for two different workloads:
 
 ### Path A — `engine=` (the `visiter_native` extension)
 
-Build the optional extension once (needs a Rust toolchain):
+Install the optional extension — a prebuilt wheel (`abi3`, CPython 3.11+), no
+toolchain needed:
 
 ```bash
-make native        # builds visiter_native into the venv via maturin
+pip install "visiter[native]"   # prebuilt wheel
+make native                     # or build it locally (needs a Rust toolchain)
 ```
 
 Once installed, `engine="auto"` (the default) routes **unbounded** builds

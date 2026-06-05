@@ -4,9 +4,23 @@ build-backend = "maturin"
 
 [project]
 name = "visiter_native"
-version = "0.0.0"
-description = "Optional native BFS engine for visiter."
-requires-python = ">=3.9"
+version = "0.1.0"
+description = "Optional native BFS engine for visiter (engine='native')."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jakob Stemberger", email = "jakob.stemberger@gmail.com" }]
+requires-python = ">=3.11"
+keywords = ["visiter", "graph", "bfs", "native", "pyo3"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.urls]
+Homepage = "https://github.com/yaccob/visiter"
+Issues = "https://github.com/yaccob/visiter/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

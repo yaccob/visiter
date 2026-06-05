@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Native engine ships as a wheel — `pip install "visiter[native]"`.** The
+  `visiter_native` PyO3 extension is now built as `abi3` wheels (one per
+  platform, CPython 3.11+) by a `native-wheels` workflow and published to PyPI
+  on a `native-v*` tag, so the native engine no longer needs a local Rust
+  toolchain (`make native` still works for local builds). The new `[native]`
+  extra pulls it; `engine="auto"` picks it up automatically.
 - **`lang="rust"` reaches full parity with the Python path.** Three additions
   close the remaining gaps:
   - **`Fraction` state values** — exact rationals backed by

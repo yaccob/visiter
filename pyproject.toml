@@ -35,6 +35,9 @@ analytics = [
 storage = [
     "pyarrow>=14",
 ]
+native = [
+    "visiter_native>=0.1.0",
+]
 dev = [
     "pytest>=7",
     "build>=1.0",

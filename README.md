@@ -33,10 +33,10 @@ pip install visiter
 Graphviz must be available on `PATH` (`brew install graphviz` /
 `apt install graphviz`).
 
-Optional extras: `pip install "visiter[storage]"` adds the columnar
-`.vitgraph` format, `[validate]` the JSON-Schema validator, `[analytics]`
-the NetworkX bridge. The optional native engine is built separately with
-`make native` (needs a Rust toolchain). See *Performance & storage* below.
+Optional extras: `pip install "visiter[native]"` adds the native engine
+(prebuilt wheel, no toolchain needed), `[storage]` the columnar `.vitgraph`
+format, `[validate]` the JSON-Schema validator, `[analytics]` the NetworkX
+bridge. See *Performance & storage* below.
 
 ## Going further
 
@@ -118,10 +118,11 @@ Pure Python with JSON is the default and needs no toolchain. For large
 state spaces, three optional, additive features kick in — all producing
 the same graph, byte-for-byte:
 
-- **Native engine** (`engine="auto"`, the default once built). `make native`
-  builds an optional Rust extension that runs the BFS bookkeeping natively
-  for unbounded builds while keeping your Python callbacks. Falls back to
-  pure Python when absent.
+- **Native engine** (`engine="auto"`, the default once present).
+  `pip install "visiter[native]"` pulls a prebuilt wheel that runs the BFS
+  bookkeeping natively for unbounded builds while keeping your Python
+  callbacks (or `make native` to build it locally). Falls back to pure Python
+  when absent.
 - **Inline Rust callbacks** (`lang="rust"`) — for when the *callbacks* are
   the bottleneck. `.case()` takes Rust expression strings (value bound to
   `s`), compiled on the fly with `rustc` and run natively:
