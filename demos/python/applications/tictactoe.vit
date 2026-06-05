@@ -6,8 +6,8 @@
 # Default is 9 (full game — 765 nodes). Pass --depth N for a preview.
 #
 # Usage:
-#   viter demos/applications/tictactoe.vit                  # full game
-#   viter demos/applications/tictactoe.vit --depth 3        # compact preview
+#   viter demos/python/applications/tictactoe.vit                  # full game
+#   viter demos/python/applications/tictactoe.vit --depth 3        # compact preview
 import argparse
 import sys
 import os

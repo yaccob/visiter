@@ -6,7 +6,7 @@
 # integer rational, so "1 + 1/x" reads as `r(1) + s.recip()`.
 #
 # Usage:
-#   viter demos/rust/golden_ratio.vit
+#   viter demos/rust/basics/golden_ratio.vit
 (viter([Fraction(1)], lang="rust", max_depth=8, key_type="number")
  .case("true", "r(1) + s.recip()", label="1 + 1/x")
  .render())

@@ -10,7 +10,7 @@
 # though they get long inline.
 #
 # Usage:
-#   viter demos/rust/strings.vit
+#   viter demos/rust/basics/strings.vit
 # Note: a single string is one start value only when wrapped in a list —
 # viter("ab") would iterate the characters, like any non-int iterable.
 (viter([""], lang="rust", max_depth=4)

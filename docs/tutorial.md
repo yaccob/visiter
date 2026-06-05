@@ -300,8 +300,8 @@ stub for "other nodes still feed in from outside"):
 
 ![crop, direction=backward](images/crop_backward.svg)
 
-See [`demos/rendering/cropping.vit`](../demos/rendering/cropping.vit)
-and [`demos/rendering/custom_colors.vit`](../demos/rendering/custom_colors.vit)
+See [`demos/python/rendering/cropping.vit`](../demos/python/rendering/cropping.vit)
+and [`demos/python/rendering/custom_colors.vit`](../demos/python/rendering/custom_colors.vit)
 for examples.
 
 ---
@@ -355,7 +355,7 @@ the 1-branch, and a cropped-out incoming stub at 2:
 No. Values can be any hashable, `str()`-able Python object: integers,
 strings, tuples, frozensets. The condition and op functions just need
 to agree on the type. See
-[`demos/basics/string_iteration.vit`](../demos/basics/string_iteration.vit) for
+[`demos/python/basics/string_iteration.vit`](../demos/python/basics/string_iteration.vit) for
 a string-valued example (drop trailing vowels until none remain).
 
 A few `to_dot` features are intrinsically integer-specific —
@@ -406,7 +406,7 @@ builder's `.render()` method does it in one call:
 after the `.vit` path are passed through as `sys.argv`:
 
 ```bash
-viter demos/applications/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
+viter demos/python/applications/water_jugs.vit --cap-a 4 --cap-b 7 --target 5
 ```
 
 See the [demos/](../demos/) for runnable examples.
@@ -449,7 +449,7 @@ print(list(nx.simple_cycles(nxg)))
 ```
 
 See the [manual's NetworkX section](manual.md#7-integrating-with-networkx) and
-the [`demos/integration/`](../demos/integration/) examples for more.
+the [`demos/python/integration/`](../demos/python/integration/) examples for more.
 
 ## What does the JSON Schema buy me?
 

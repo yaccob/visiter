@@ -726,7 +726,7 @@ from sympy import Rational
 ```
 
 A runnable end-to-end version of this pipeline lives in
-[`demos/basics/golden_ratio.vit`](../demos/basics/golden_ratio.vit).
+[`demos/python/basics/golden_ratio.vit`](../demos/python/basics/golden_ratio.vit).
 
 ---
 
@@ -926,7 +926,7 @@ graph.to_dot(node_label_attr="members").render()
  .render())
 ```
 
-See [`demos/integration/condensation.vit`](../demos/integration/condensation.vit)
+See [`demos/python/integration/condensation.vit`](../demos/python/integration/condensation.vit)
 for the full end-to-end example.
 
 ### Fluent chain: `NxFilter`
@@ -953,7 +953,7 @@ print(list(nx.simple_cycles(nxg)))
 print(nx.in_degree_centrality(nxg))
 ```
 
-See the [`demos/integration/`](../demos/integration/) directory for
+See the [`demos/python/integration/`](../demos/python/integration/) directory for
 runnable end-to-end examples.
 
 ### Worked example: water jug shortest path
@@ -978,7 +978,7 @@ answer as a standalone image:
 Bold cell values mark the target amount; the darkened node is the
 goal state where the path ends. The full pipeline (build → analyze →
 subgraph → render) is in
-[`demos/applications/water_jugs.vit`](../demos/applications/water_jugs.vit).
+[`demos/python/applications/water_jugs.vit`](../demos/python/applications/water_jugs.vit).
 
 ### Scope
 
