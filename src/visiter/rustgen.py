@@ -14,9 +14,12 @@ including default bounds, ghost-stub pseudo-edges, ``max_nodes`` truncation,
 
 Supported state values (inferred from the start values): ``int``, ``tuple`` of
 ints (arity >= 2), ``str``, and ``Fraction`` (exact rationals via
-``num-rational``/``num-bigint``, compiled through ``cargo``). ``OpResult``
-(per-call labels) and ``time_limit`` are not yet supported — the Builder raises
-rather than diverging silently.
+``num-rational``/``num-bigint``, compiled through ``cargo``). ``max_depth`` /
+``max_nodes`` / ``time_limit`` bounds, ``bound=`` predicates, ``tags=`` and
+per-call edge labels (``label_rs=``, the ``OpResult`` analogue) all match the
+Python path. Heterogeneous value types are the only gap — rustc rejects the
+type mix, which surfaces as a clear compile error rather than a silent
+divergence.
 """
 import hashlib
 import os
@@ -141,6 +144,7 @@ fn main() {{
     let mut depths: Vec<i64> = Vec::new();
     let mut tagbits: Vec<u32> = Vec::new();
     let mut edges: Vec<(u32, u32, usize)> = Vec::new();
+    let mut edge_labels: Vec<Option<String>> = Vec::new();
     let mut seen_edges: HashSet<(u32, u32)> = HashSet::new();
     let mut pseudo: Vec<(u32, usize)> = Vec::new();
     let mut seen_pseudo: HashSet<(u32, usize)> = HashSet::new();
@@ -196,7 +200,17 @@ fn main() {{
         writeln!(f).unwrap();
     }}
     writeln!(f, "{{}}", edges.len()).unwrap();
-    for &(a, b, o) in &edges {{ writeln!(f, "{{}} {{}} {{}}", a, b, o).unwrap(); }}
+    for i in 0..edges.len() {{
+        let (a, b, o) = edges[i];
+        match &edge_labels[i] {{
+            Some(l) => {{
+                writeln!(f, "{{}} {{}} {{}} {{}}", a, b, o, l.len()).unwrap();
+                f.write_all(l.as_bytes()).unwrap();
+                writeln!(f).unwrap();
+            }}
+            None => {{ writeln!(f, "{{}} {{}} {{}} -1", a, b, o).unwrap(); }}
+        }}
+    }}
     writeln!(f, "{{}}", pseudo.len()).unwrap();
     for &(x, o) in &pseudo {{ writeln!(f, "{{}} {{}}", x, o).unwrap(); }}
     writeln!(f, "{{}} {{}}", depth_limited as u8, trunc_reason).unwrap();
@@ -222,17 +236,27 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
     const_lines = "\n".join(f"const {k}: i64 = {v};" for k, v in consts.items())
 
     cb = []
-    for i, (cond, op, _l, _id, bound, _ex) in enumerate(cases):
+    op_label_rs = []   # op index -> label_rs expr (per-call label) or None
+    for i, (cond, op, _l, _id, bound, _ex, lrs) in enumerate(cases):
         cb.append(f"#[inline(always)] fn cond{i}(s: {ptype}) -> bool {{ ({cond}) }}")
         cb.append(f"#[inline(always)] fn op{i}(s: {ptype}) -> V {{ ({op}) }}")
         if bound is not None:
             cb.append(f"#[inline(always)] fn bound{i}(s: {ptype}) -> bool "
                       f"{{ ({bound}) }}")
+        if lrs is not None:
+            cb.append(f"#[inline(always)] fn label{i}(s: {ptype}) -> String "
+                      f"{{ ({lrs}) }}")
+        op_label_rs.append(lrs)
     if default is not None:
         # The default op gets index len(cases); name it op{n} so the generated
         # visit code (which calls op{op_idx}) resolves it.
-        cb.append(f"#[inline(always)] fn op{len(cases)}(s: {ptype}) -> V "
+        di = len(cases)
+        cb.append(f"#[inline(always)] fn op{di}(s: {ptype}) -> V "
                   f"{{ ({default[0]}) }}")
+        if default[3] is not None:
+            cb.append(f"#[inline(always)] fn label{di}(s: {ptype}) -> String "
+                      f"{{ ({default[3]}) }}")
+        op_label_rs.append(default[3])
     for j, (_name, expr) in enumerate(tag_items):
         cb.append(f"#[inline(always)] fn tag{j}(s: {ptype}) -> bool {{ ({expr}) }}")
 
@@ -244,6 +268,10 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
     def visit(op_idx):
         v_ins = "id_of.insert(v, i);" if copy else "id_of.insert(v.clone(), i);"
         vref = "v" if copy else "&v"
+        # Per-call edge label (OpResult analogue) computed from the source `s`,
+        # else None (the Python side fills in the static op label).
+        edge_label = (f"Some(label{op_idx}({carg}))"
+                      if op_label_rs[op_idx] is not None else "None")
         return (
             "{ let v = " + f"op{op_idx}({carg}); "
             "let nid = match id_of.get(&v) { Some(&i) => i, None => { "
@@ -255,7 +283,8 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
             f"let tb = tags_of({vref}); "
             "depths.push(cur_depth + 1); tagbits.push(tb); "
             f"{v_ins} values.push(v); next.push(i); i }} }}; "
-            f"if seen_edges.insert((xid, nid)) {{ edges.push((xid, nid, {op_idx})); }} }}")
+            f"if seen_edges.insert((xid, nid)) {{ edges.push((xid, nid, {op_idx})); "
+            f"edge_labels.push({edge_label}); }} }}")
 
     def add_pseudo(op_idx):
         return (f"if seen_pseudo.insert((xid, {op_idx})) {{ "
@@ -263,7 +292,7 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
 
     body = []
     n = len(cases)
-    for i, (cond, op, _l, _id, bound, exclusive) in enumerate(cases):
+    for i, (cond, op, _l, _id, bound, exclusive, _lrs) in enumerate(cases):
         if bound is not None:
             pseudo_cond = f"at_max || !bound{i}({carg})"
         else:
@@ -374,12 +403,12 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
     # Resolve label/id: default to the op expression itself; build op metadata.
     op_ids = []           # op index -> id (rules then default)
     op_labels = {}
-    for cond, op, label, id_, bound, exclusive in cases:
+    for cond, op, label, id_, bound, exclusive, label_rs in cases:
         oid = id_ if id_ is not None else op
         op_ids.append(oid)
         op_labels.setdefault(oid, label if label is not None else op)
     if default is not None:
-        dop, dlabel, did = default
+        dop, dlabel, did, dlabel_rs = default
         oid = did if did is not None else dop
         op_ids.append(oid)
         op_labels.setdefault(oid, dlabel if dlabel is not None else dop)
@@ -415,9 +444,11 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
     n_edges = int(r.line())
     edges = []
     for _ in range(n_edges):
-        a, b, o = (int(x) for x in r.line().split())
+        a, b, o, llen = (int(x) for x in r.line().split())
+        # llen >= 0: a per-call (OpResult-style) label follows; else static.
+        lab = r.blob(llen) if llen >= 0 else op_labels[op_ids[o]]
         edges.append({"from": keys[a], "to": keys[b], "op": op_ids[o],
-                      "label": op_labels[op_ids[o]]})
+                      "label": lab})
 
     n_pseudo = int(r.line())
     seen_pseudo = set()

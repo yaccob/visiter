@@ -15,7 +15,7 @@ from fractions import Fraction
 
 import pytest
 
-from visiter import Match, viter
+from visiter import Match, OpResult, viter
 
 rustc = pytest.mark.skipif(
     shutil.which("rustc") is None, reason="rustc not on PATH")
@@ -202,7 +202,28 @@ def test_parity_time_limit_zero_truncates():
     assert py["nodes"] == {}
 
 
+@rustc
+def test_parity_opresult_per_call_labels():
+    # Python returns OpResult for a per-call edge label; the rust analogue is
+    # label_rs (a Rust expression over `s`). max_depth=2 also produces
+    # pseudo-edges, which keep the *static* label in both paths.
+    _assert_parity(
+        lambda: (viter(5, max_depth=2, engine="python")
+                 .case(lambda n: n >= 1,
+                       lambda n: OpResult(n - 1, label=f"-1 from {n}"),
+                       label="dec", id="dec")),
+        lambda: (viter(5, max_depth=2, lang="rust")
+                 .case("s >= 1", "s - 1", label="dec", id="dec",
+                       label_rs='format!("-1 from {}", s)')))
+
+
 # --- validation (run regardless of rustc) ------------------------------------
+
+def test_label_rs_rejected_in_python_path():
+    with pytest.raises(ValueError, match="label_rs"):
+        (viter(5).case(lambda n: n >= 1, lambda n: n - 1,
+                       label_rs='format!("{}", s)').build())
+
 
 def test_rust_rejects_unsupported_value_type():
     with pytest.raises(ValueError, match="int, tuple"):

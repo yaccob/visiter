@@ -33,9 +33,10 @@ class OnLimit(str, Enum):
     RAISE = "raise"
 
 
-_Case = namedtuple("_Case",
-                   ["condition", "fn", "label", "id", "bound", "exclusive"])
-_Default = namedtuple("_Default", ["fn", "label", "id"])
+_Case = namedtuple(
+    "_Case",
+    ["condition", "fn", "label", "id", "bound", "exclusive", "label_rs"])
+_Default = namedtuple("_Default", ["fn", "label", "id", "label_rs"])
 _UNSET = object()
 
 
@@ -59,7 +60,7 @@ class Builder:
         )
 
     def case(self, condition, fn, *, label=None, id=None, bound=None,
-             exclusive=None):
+             exclusive=None, label_rs=None):
         """Add a guarded case to the chain.
 
         `condition(x)` decides applicability; `fn(x)` produces the
@@ -78,9 +79,14 @@ class Builder:
         `exclusive=None` (the default) lets the chain-level `match=` mode
         decide: Match.ALL → not exclusive, Match.FIRST → exclusive. An
         explicit True/False overrides the mode for this case only.
+
+        `label_rs` is the `lang="rust"` analogue of returning an
+        ``OpResult`` from `fn`: a Rust expression string (value bound to
+        ``s``) that computes the per-edge label for each firing of this
+        case. It is rejected in the Python path — use ``OpResult`` there.
         """
         return self._with(cases=self._cases + (
-            _Case(condition, fn, label, id, bound, exclusive),))
+            _Case(condition, fn, label, id, bound, exclusive, label_rs),))
 
     def cases(self, iterable):
         """Add multiple cases from an iterable.
@@ -101,7 +107,7 @@ class Builder:
                     "cases items must be (cond, fn) or (cond, fn, kwargs)")
         return b
 
-    def default(self, fn=None, *, label=None, id=None):
+    def default(self, fn=None, *, label=None, id=None, label_rs=None):
         """Set the fallback op (fires only when no case matched).
 
         Behaves identically to ``case`` regarding the return value of
@@ -116,7 +122,7 @@ class Builder:
         """
         if self._default is not _UNSET:
             raise RuntimeError("default already set")
-        return self._with(default=_Default(fn, label, id))
+        return self._with(default=_Default(fn, label, id, label_rs))
 
     def build(self):
         """Materialize the accumulated cases as a Graph."""
@@ -125,6 +131,14 @@ class Builder:
 
         if self._options.get("lang", "python") == "rust":
             return self._build_rust(default_exclusive)
+
+        label_rs = [c.label_rs for c in self._cases]
+        if self._default is not _UNSET:
+            label_rs.append(self._default.label_rs)
+        if any(x is not None for x in label_rs):
+            raise ValueError(
+                "label_rs= requires lang='rust'; in the Python path, return "
+                "OpResult(value, label=…) from the op fn instead")
 
         # Lazy import: keeps Rule/Op out of the public `visiter` surface
         # while still letting the Builder translate cases into them.
@@ -152,11 +166,11 @@ class Builder:
     def _build_rust(self, default_exclusive):
         """Path B: compile the Rust-string cases and run the native BFS.
 
-        ``.case()`` / ``.default()`` / ``bound=`` / ``tags=`` carried Rust
-        expression strings (value bound to ``s``). Defaults, bounds, and
-        ``time_limit`` match the Python path exactly (``max_depth=64``,
-        ``max_nodes=1024``), including ghost-stub pseudo-edges. ``OpResult`` is
-        not yet supported and raises rather than diverging silently.
+        ``.case()`` / ``.default()`` / ``bound=`` / ``tags=`` / ``label_rs=``
+        carried Rust expression strings (value bound to ``s``). Defaults,
+        bounds, ``time_limit`` and per-call labels (``label_rs``, the
+        ``OpResult`` analogue) match the Python path exactly (``max_depth=64``,
+        ``max_nodes=1024``), including ghost-stub pseudo-edges.
         """
         from .builder import OnLimit
         from .rustgen import build_rust
@@ -176,11 +190,11 @@ class Builder:
             eff_exclusive = (default_exclusive if c.exclusive is None
                              else c.exclusive)
             cases.append((c.condition, c.fn, c.label, c.id, c.bound,
-                          eff_exclusive))
+                          eff_exclusive, c.label_rs))
         default = None
         if self._default is not _UNSET and self._default.fn is not None:
             d = self._default
-            default = (d.fn, d.label, d.id)
+            default = (d.fn, d.label, d.id, d.label_rs)
 
         return build_rust(starts, cases, default,
                           consts=self._options.get("consts"),
