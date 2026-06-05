@@ -18,10 +18,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -38,7 +38,7 @@ jobs:
           .venv/bin/pip install -e ".[dev]"
           # Mark the venv as ready so `make` targets use it instead of
           # recreating it with the pinned interpreter (PYTHON?=python3.12,
-          # which is not installed in the 3.9/3.13 jobs).
+          # which is not installed in the 3.11/3.13 jobs).
           touch .venv/.installed
 
       - name: Run tests
@@ -56,10 +56,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
