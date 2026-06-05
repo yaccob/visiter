@@ -11,6 +11,7 @@ Explicit id=/label= are passed in both builds so op metadata matches; the only
 difference is the callback representation (lambda vs string).
 """
 import shutil
+from fractions import Fraction
 
 import pytest
 
@@ -18,6 +19,8 @@ from visiter import Match, viter
 
 rustc = pytest.mark.skipif(
     shutil.which("rustc") is None, reason="rustc not on PATH")
+cargo = pytest.mark.skipif(
+    shutil.which("cargo") is None, reason="cargo not on PATH")
 
 
 def _assert_parity(py_chain, rs_chain):
@@ -157,6 +160,21 @@ def test_expression_is_default_label_and_id():
     assert g["op_order"] == ["s - 1"]
     assert g["op_labels"] == {"s - 1": "s - 1"}
     assert g["edges"][0]["label"] == "s - 1"
+
+
+@rustc
+@cargo
+def test_parity_golden_ratio_rational():
+    # Exact rationals: x -> 1 + 1/x from Fraction(1). Rust uses BigRational
+    # (num-rational, compiled via cargo); must match Python's Fraction exactly,
+    # including the Fibonacci-ratio keys (1, 2, 3/2, 5/3, 8/5, ...).
+    _assert_parity(
+        lambda: (viter([Fraction(1)], max_depth=7, key_type="number",
+                       engine="python")
+                 .case(lambda x: True, lambda x: 1 + 1 / x, label="g", id="g")),
+        lambda: (viter([Fraction(1)], max_depth=7, key_type="number",
+                       lang="rust")
+                 .case("true", "r(1) + s.recip()", label="g", id="g")))
 
 
 # --- validation (run regardless of rustc) ------------------------------------

@@ -13,17 +13,50 @@ including default bounds, ghost-stub pseudo-edges, ``max_nodes`` truncation,
 ``lang="python"`` in toolchain-less environments.
 
 Supported state values (inferred from the start values): ``int``, ``tuple`` of
-ints (arity >= 2), and ``str``. ``OpResult`` (per-call labels) and ``time_limit``
-are not yet supported — the Builder raises rather than diverging silently.
+ints (arity >= 2), ``str``, and ``Fraction`` (exact rationals via
+``num-rational``/``num-bigint``, compiled through ``cargo``). ``OpResult``
+(per-call labels) and ``time_limit`` are not yet supported — the Builder raises
+rather than diverging silently.
 """
 import hashlib
+import os
 import shutil
 import subprocess
 import tempfile
 import warnings
+from fractions import Fraction
 from pathlib import Path
 
 _CACHE = Path(tempfile.gettempdir()) / "visiter-rustgen-cache"
+
+# Rational state values need num-bigint/num-rational, which bare rustc cannot
+# fetch, so they compile through cargo. The shared target dir means the deps
+# compile once and are reused across every generated program.
+_CARGO_TARGET = _CACHE / "cargo-target"
+_CARGO_TOML = """\
+[package]
+name = "{name}"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "{name}"
+path = "main.rs"
+
+[dependencies]
+num-bigint = "0.4"
+num-rational = "0.4"
+
+[profile.release]
+opt-level = 3
+"""
+
+_RATIONAL_PRELUDE = (
+    "use num_bigint::BigInt;\n"
+    "use num_rational::BigRational;\n"
+    "#[inline(always)] fn r(n: i64) -> BigRational "
+    "{ BigRational::from_integer(BigInt::from(n)) }"
+)
 
 
 def _escape_rs(s):
@@ -38,10 +71,22 @@ def _value_type(sample):
     type), ``copy`` (bool), ``keyfmt`` (expr over a param ``s`` of ``ptype``),
     ``render_start`` (value -> Rust literal), ``json_type``.
     """
+    base = dict(prelude="", needs_cargo=False)
     if isinstance(sample, bool):
         raise ValueError("lang='rust' does not support bool state values")
+    if isinstance(sample, Fraction):
+        # Python str(Fraction) drops the denominator when it is 1 (e.g. "2",
+        # not "2/1"); match that exactly so node keys agree.
+        return dict(base, vtype="BigRational", ptype="&BigRational", copy=False,
+                    prelude=_RATIONAL_PRELUDE, needs_cargo=True,
+                    keyfmt='if s.denom() == &BigInt::from(1) '
+                           '{ format!("{}", s.numer()) } '
+                           'else { format!("{}/{}", s.numer(), s.denom()) }',
+                    render_start=lambda v: f"BigRational::new(BigInt::from"
+                    f"({v.numerator}i64), BigInt::from({v.denominator}i64))",
+                    json_type="string")
     if isinstance(sample, int):
-        return dict(vtype="i64", ptype="i64", copy=True,
+        return dict(base, vtype="i64", ptype="i64", copy=True,
                     keyfmt='format!("{}", s)',
                     render_start=lambda v: f"{v}i64", json_type="integer")
     if (isinstance(sample, tuple) and len(sample) >= 2
@@ -51,18 +96,18 @@ def _value_type(sample):
         vtype = "(" + ", ".join(["i64"] * k) + ")"
         placeholders = ", ".join("{}" for _ in range(k))
         accessors = ", ".join(f"s.{i}" for i in range(k))
-        return dict(vtype=vtype, ptype=vtype, copy=True,
+        return dict(base, vtype=vtype, ptype=vtype, copy=True,
                     keyfmt=f'format!("({placeholders})", {accessors})',
                     render_start=lambda v: "(" + ", ".join(f"{x}i64" for x in v)
                     + ")", json_type="array")
     if isinstance(sample, str):
-        return dict(vtype="String", ptype="&str", copy=False,
+        return dict(base, vtype="String", ptype="&str", copy=False,
                     keyfmt="s.to_string()",
                     render_start=lambda v: f'String::from("{_escape_rs(v)}")',
                     json_type="string")
     raise ValueError(
-        "lang='rust' supports int, tuple-of-ints (arity >= 2), or str start "
-        f"values; got {type(sample).__name__} {sample!r}")
+        "lang='rust' supports int, tuple-of-ints (arity >= 2), str, or "
+        f"Fraction start values; got {type(sample).__name__} {sample!r}")
 
 
 _TEMPLATE = """\
@@ -71,6 +116,7 @@ use std::collections::{{HashMap, HashSet}};
 use std::io::Write;
 
 type V = {vtype};
+{prelude}
 {consts}
 
 {callbacks}
@@ -225,21 +271,52 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
             f"else {visit(di)} }}")
 
     return _TEMPLATE.format(
-        vtype=vtype, ptype=ptype, consts=const_lines,
-        callbacks="\n".join(cb), keyfmt=vt["keyfmt"], tag_checks=tag_checks,
+        vtype=vtype, prelude=vt.get("prelude", ""), consts=const_lines,
+        ptype=ptype, callbacks="\n".join(cb), keyfmt=vt["keyfmt"],
+        tag_checks=tag_checks,
         starts=", ".join(vt["render_start"](s) for s in starts),
         start_ref=start_ref, start_ins=start_ins, emit_ref=emit_ref,
         bind_s=bind_s, cases_body="\n".join(body),
     )
 
 
-def _compile(source):
+def _compile_error(src, stderr):
+    return RuntimeError(
+        "Rust compilation of the generated callbacks failed — a Rust "
+        "expression in .case()/.default()/bound=/tags= is likely invalid "
+        f"(the value is bound to `s`). Generated source:\n  {src}\n\n{stderr}")
+
+
+def _compile(source, needs_cargo=False):
+    _CACHE.mkdir(parents=True, exist_ok=True)
+    h = hashlib.sha256(source.encode()).hexdigest()[:16]
+
+    if needs_cargo:
+        # Rational values: compile via cargo (num-bigint/num-rational deps),
+        # sharing one target dir so the deps build once.
+        if shutil.which("cargo") is None:
+            raise RuntimeError(
+                "lang='rust' with Fraction values needs cargo on PATH "
+                "(https://rustup.rs) or use lang='python'.")
+        proj = _CACHE / f"proj_{h}"
+        binary = _CARGO_TARGET / "release" / f"p{h}"
+        if not binary.exists():
+            proj.mkdir(parents=True, exist_ok=True)
+            (proj / "Cargo.toml").write_text(_CARGO_TOML.format(name=f"p{h}"))
+            (proj / "main.rs").write_text(source)
+            proc = subprocess.run(
+                ["cargo", "build", "--release",
+                 "--manifest-path", str(proj / "Cargo.toml")],
+                capture_output=True, text=True,
+                env={**os.environ, "CARGO_TARGET_DIR": str(_CARGO_TARGET)})
+            if proc.returncode != 0:
+                raise _compile_error(proj / "main.rs", proc.stderr)
+        return binary
+
     if shutil.which("rustc") is None:
         raise RuntimeError(
             "lang='rust' needs the Rust compiler (rustc) on PATH. Install Rust "
             "(https://rustup.rs) or use lang='python'.")
-    _CACHE.mkdir(parents=True, exist_ok=True)
-    h = hashlib.sha256(source.encode()).hexdigest()[:16]
     binary = _CACHE / h
     if not binary.exists():
         src = _CACHE / f"{h}.rs"
@@ -249,11 +326,7 @@ def _compile(source):
              "-C", "codegen-units=1", "-o", str(binary), str(src)],
             capture_output=True, text=True)
         if proc.returncode != 0:
-            raise RuntimeError(
-                "rustc failed to compile the generated callbacks — a Rust "
-                "expression in .case()/.default()/bound=/tags= is likely "
-                f"invalid (the value is bound to `s`). Generated source:\n"
-                f"  {src}\n\nrustc said:\n{proc.stderr}")
+            raise _compile_error(src, proc.stderr)
     return binary
 
 
@@ -304,7 +377,7 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
         op_labels.setdefault(oid, dlabel if dlabel is not None else dop)
 
     source = _render_source(starts, cases, default, consts, tag_items, vt)
-    binary = _compile(source)
+    binary = _compile(source, vt.get("needs_cargo", False))
     md = -1 if max_depth is None else int(max_depth)
     mn = -1 if max_nodes is None else int(max_nodes)
     with tempfile.NamedTemporaryFile(suffix=".graph") as tf:
