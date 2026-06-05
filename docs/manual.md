@@ -1066,20 +1066,24 @@ Constants are injected with `consts=` (i64), and tuple state uses `s.0`, `s.1`:
 `lang="rust"` is a **drop-in**: the same chain yields the same graph as the
 Python path, byte-for-byte. Requirements and scope:
 
-- **`rustc` must be on `PATH`** (install via <https://rustup.rs>). There is no
-  Python fallback for Rust source — use `lang="python"` in toolchain-less
-  environments. The first build per unique source pays a compile cost; later
-  builds hit the cache.
-- **State values:** `int`, `tuple`-of-`int` (arity ≥ 2), or `str`, inferred
-  from the start values. Node keys match Python's `str()` exactly.
-- **Full behavioral parity:** `max_depth` and `max_nodes` apply with the same
-  defaults as the Python path (64 / 1024) and produce the same ghost-stub
-  pseudo-edges; `bound=` predicates (also Rust strings), `tags=` (Rust-string
-  predicates), `key_type=`, `Match.ALL`/`Match.FIRST`, `default`, and
-  `on_limit` all behave identically.
-- **Not yet supported — raises, never diverges silently:** `time_limit`,
-  `OpResult` per-call labels, and heterogeneous value types (rustc rejects
-  type mixing). `Fraction`/`Decimal` values stay Python-only.
+- **`rustc` must be on `PATH`** (install via <https://rustup.rs>); `Fraction`
+  values additionally need `cargo` (they pull `num-rational`/`num-bigint`).
+  There is no Python fallback for Rust source — use `lang="python"` in
+  toolchain-less environments. The first build per unique source pays a compile
+  cost; later builds hit the cache.
+- **State values:** `int`, `tuple`-of-`int` (arity ≥ 2), `str`, or `Fraction`
+  (exact rationals), inferred from the start values. Node keys match Python's
+  `str()` exactly. Rationals bind `s` as `&BigRational` with an `r(n)` helper,
+  so e.g. golden ratio is `.case("true", "r(1) + s.recip()")`.
+- **Full behavioral parity:** `max_depth`, `max_nodes` and `time_limit` apply
+  with the same defaults as the Python path (64 / 1024) and produce the same
+  ghost-stub pseudo-edges / truncation; `bound=` predicates, `tags=`
+  (Rust-string predicates), `key_type=`, `Match.ALL`/`Match.FIRST`, `default`,
+  `on_limit`, and per-call edge labels (`label_rs=`, the `OpResult` analogue)
+  all behave identically.
+- **The one gap:** heterogeneous value types — a chain whose values are not all
+  the same type — which rustc rejects as a clear compile error rather than a
+  silent divergence. `Decimal` stays Python-only.
 - Runnable examples: [`demos/rust/`](../demos/rust/).
 
 ### Columnar storage — `.vitgraph` (the `[storage]` extra)

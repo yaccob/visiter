@@ -57,9 +57,10 @@ def _all_vit_files():
                          ids=lambda p: str(p.relative_to(DEMOS)))
 def test_vit_demo_runs(vit, tmp_path):
     """Each .vit demo runs successfully."""
-    # demos/rust/* use lang="rust" and compile callbacks with rustc.
-    if "rust" in vit.parts and not _have("rustc"):
-        pytest.skip("rustc not on PATH (required by lang='rust' demos)")
+    # demos/rust/* use lang="rust" and compile callbacks with rustc (and cargo
+    # for the Fraction-valued ones).
+    if "rust" in vit.parts and not (_have("rustc") and _have("cargo")):
+        pytest.skip("rustc/cargo not on PATH (required by lang='rust' demos)")
     extra = VIT_EXTRA_ARGS.get(vit.name, [])
     env = {**os.environ, "PATH": AUGMENTED_PATH}
     result = subprocess.run(

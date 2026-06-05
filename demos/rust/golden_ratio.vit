@@ -1,0 +1,12 @@
+#!/usr/bin/env viter
+# Golden ratio via EXACT rationals in lang="rust": x -> 1 + 1/x from Fraction(1).
+# The trajectory is 1, 2, 3/2, 5/3, 8/5, 13/8, ... — Fibonacci-ratio convergents
+# to phi, computed with num-rational's BigRational (so this demo needs cargo, not
+# just rustc). The value is bound as `s` (a &BigRational); `r(n)` builds an
+# integer rational, so "1 + 1/x" reads as `r(1) + s.recip()`.
+#
+# Usage:
+#   viter demos/rust/golden_ratio.vit
+(viter([Fraction(1)], lang="rust", max_depth=8, key_type="number")
+ .case("true", "r(1) + s.recip()", label="1 + 1/x")
+ .render())

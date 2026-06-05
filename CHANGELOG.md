@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`lang="rust"` reaches full parity with the Python path.** Three additions
+  close the remaining gaps:
+  - **`Fraction` state values** — exact rationals backed by
+    `num-rational`/`num-bigint`, so e.g. golden ratio
+    (`x → 1 + 1/x`) matches Python's `Fraction` at any depth. Rational programs
+    compile through `cargo` (a shared target dir builds the deps once); other
+    value types keep the faster bare-`rustc` path.
+  - **`time_limit`** — the wall-clock deadline is honoured with the same
+    truncation/warning/`on_limit` behaviour as the Python build.
+  - **`label_rs=`** on `.case()`/`.default()` — a Rust expression (value bound
+    to `s`) computing a per-call edge label, the `lang="rust"` analogue of
+    returning `OpResult(value, label=…)`. Rejected in the Python path (use
+    `OpResult` there).
+  The only remaining gap is heterogeneous value types (rustc rejects the mix
+  as a clear compile error, never a silent divergence).
+
+---
+
 ## [0.15.0] — 2026-06-05
 
 ### Added
