@@ -177,13 +177,32 @@ def test_parity_golden_ratio_rational():
                  .case("true", "r(1) + s.recip()", label="g", id="g")))
 
 
+@rustc
+def test_parity_time_limit_not_hit():
+    # A generous time_limit that is never reached must not change the graph.
+    _assert_parity(
+        lambda: (viter(10, max_depth=None, max_nodes=None,
+                       time_limit="01:00:00", engine="python")
+                 .case(lambda n: n >= 1, lambda n: n - 1, label="t", id="t")),
+        lambda: (viter(10, max_depth=None, max_nodes=None,
+                       time_limit="01:00:00", lang="rust")
+                 .case("s >= 1", "s - 1", label="t", id="t")))
+
+
+@rustc
+def test_parity_time_limit_zero_truncates():
+    # time_limit=0 truncates before any expansion: both paths yield an empty
+    # graph (no nodes) and warn. (Deterministic because elapsed >= 0 always.)
+    kw = dict(max_depth=None, max_nodes=None, time_limit="00:00:00")
+    py = (viter(10, engine="python", **kw)
+          .case(lambda n: n >= 1, lambda n: n - 1, label="t", id="t").build())
+    rs = (viter(10, lang="rust", **kw)
+          .case("s >= 1", "s - 1", label="t", id="t").build())
+    assert py == rs
+    assert py["nodes"] == {}
+
+
 # --- validation (run regardless of rustc) ------------------------------------
-
-def test_rust_rejects_time_limit():
-    with pytest.raises(ValueError, match="time_limit"):
-        (viter(10, lang="rust", time_limit="00:00:01")
-         .case("s >= 1", "s - 1").build())
-
 
 def test_rust_rejects_unsupported_value_type():
     with pytest.raises(ValueError, match="int, tuple"):

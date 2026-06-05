@@ -153,22 +153,18 @@ class Builder:
         """Path B: compile the Rust-string cases and run the native BFS.
 
         ``.case()`` / ``.default()`` / ``bound=`` / ``tags=`` carried Rust
-        expression strings (value bound to ``s``). Defaults and bounds match the
-        Python path exactly (``max_depth=64``, ``max_nodes=1024``), including
-        ghost-stub pseudo-edges. ``time_limit`` and ``OpResult`` are not yet
-        supported and raise rather than diverging silently.
+        expression strings (value bound to ``s``). Defaults, bounds, and
+        ``time_limit`` match the Python path exactly (``max_depth=64``,
+        ``max_nodes=1024``), including ghost-stub pseudo-edges. ``OpResult`` is
+        not yet supported and raises rather than diverging silently.
         """
         from .builder import OnLimit
         from .rustgen import build_rust
 
-        if self._options.get("time_limit") is not None:
-            raise ValueError(
-                "lang='rust' does not support time_limit= yet; use "
-                "lang='python' or remove it")
-
         # Same defaults as iteration.build, so the rust path is a drop-in.
         max_depth = self._options.get("max_depth", 64)
         max_nodes = self._options.get("max_nodes", 1024)
+        time_limit = self._options.get("time_limit")
         on_limit = self._options.get("on_limit", "stop")
         if isinstance(on_limit, OnLimit):
             on_limit = on_limit.value
@@ -191,7 +187,7 @@ class Builder:
                           key_type=self._options.get("key_type"),
                           tags=self._options.get("tags"),
                           max_depth=max_depth, max_nodes=max_nodes,
-                          on_limit=on_limit)
+                          time_limit=time_limit, on_limit=on_limit)
 
     def render(self, format="svg", file=None):
         """One-shot shortcut: build, convert to Dot, render.

@@ -114,6 +114,7 @@ _TEMPLATE = """\
 #![allow(unused, non_upper_case_globals)]
 use std::collections::{{HashMap, HashSet}};
 use std::io::Write;
+use std::time::Instant;
 
 type V = {vtype};
 {prelude}
@@ -132,6 +133,8 @@ fn main() {{
     let out = &args[1];
     let max_depth: i64 = args[2].parse().unwrap();   // -1 = unbounded
     let max_nodes: i64 = args[3].parse().unwrap();   // -1 = unbounded
+    let time_limit: f64 = args[4].parse().unwrap();  // -1 = unbounded
+    let start_time = Instant::now();
 
     let mut id_of: HashMap<V, u32> = HashMap::new();
     let mut values: Vec<V> = Vec::new();
@@ -143,6 +146,7 @@ fn main() {{
     let mut seen_pseudo: HashSet<(u32, usize)> = HashSet::new();
     let mut depth_limited = false;
     let mut truncated_key: Option<String> = None;
+    let mut trunc_reason: u8 = 0;  // 0 none, 1 max_nodes, 2 time_limit
 
     let mut frontier: Vec<u32> = Vec::new();
     let mut cur_depth: i64 = 0;
@@ -150,8 +154,11 @@ fn main() {{
     'bfs: {{
         for s0 in vec![{starts}] {{
             if !id_of.contains_key(&s0) {{
+                if time_limit >= 0.0 && start_time.elapsed().as_secs_f64() >= time_limit {{
+                    trunc_reason = 2; truncated_key = Some(key({start_ref})); break 'bfs;
+                }}
                 if max_nodes >= 0 && values.len() as i64 >= max_nodes {{
-                    truncated_key = Some(key({start_ref})); break 'bfs;
+                    trunc_reason = 1; truncated_key = Some(key({start_ref})); break 'bfs;
                 }}
                 let i = values.len() as u32;
                 let tb = tags_of({start_ref});
@@ -192,8 +199,7 @@ fn main() {{
     for &(a, b, o) in &edges {{ writeln!(f, "{{}} {{}} {{}}", a, b, o).unwrap(); }}
     writeln!(f, "{{}}", pseudo.len()).unwrap();
     for &(x, o) in &pseudo {{ writeln!(f, "{{}} {{}}", x, o).unwrap(); }}
-    writeln!(f, "{{}} {{}}", depth_limited as u8,
-             truncated_key.is_some() as u8).unwrap();
+    writeln!(f, "{{}} {{}}", depth_limited as u8, trunc_reason).unwrap();
     if let Some(tk) = &truncated_key {{
         writeln!(f, "{{}}", tk.len()).unwrap();
         f.write_all(tk.as_bytes()).unwrap();
@@ -241,8 +247,10 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
         return (
             "{ let v = " + f"op{op_idx}({carg}); "
             "let nid = match id_of.get(&v) { Some(&i) => i, None => { "
+            "if time_limit >= 0.0 && start_time.elapsed().as_secs_f64() >= time_limit { "
+            f"trunc_reason = 2; truncated_key = Some(key({vref})); break 'bfs; }} "
             "if max_nodes >= 0 && values.len() as i64 >= max_nodes { "
-            f"truncated_key = Some(key({vref})); break 'bfs; }} "
+            f"trunc_reason = 1; truncated_key = Some(key({vref})); break 'bfs; }} "
             "let i = values.len() as u32; "
             f"let tb = tags_of({vref}); "
             "depths.push(cur_depth + 1); tagbits.push(tb); "
@@ -348,7 +356,7 @@ class _Reader:
 
 
 def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
-               max_depth=64, max_nodes=1024, on_limit="stop"):
+               max_depth=64, max_nodes=1024, time_limit=None, on_limit="stop"):
     """Compile the Rust-string cases and run the native BFS → Graph.
 
     *cases* is a list of ``(cond, op, label, id, bound, exclusive)``; *default*
@@ -380,8 +388,13 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
     binary = _compile(source, vt.get("needs_cargo", False))
     md = -1 if max_depth is None else int(max_depth)
     mn = -1 if max_nodes is None else int(max_nodes)
+    if time_limit is None:
+        tl = -1.0
+    else:
+        h, m, s = (int(x) for x in time_limit.split(":"))
+        tl = float(h * 3600 + m * 60 + s)
     with tempfile.NamedTemporaryFile(suffix=".graph") as tf:
-        subprocess.run([str(binary), tf.name, str(md), str(mn)],
+        subprocess.run([str(binary), tf.name, str(md), str(mn), repr(tl)],
                        check=True, capture_output=True, text=True)
         r = _Reader(Path(tf.name).read_bytes())
 
@@ -417,10 +430,11 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
             pseudo_edges.append({"from": keys[x], "op": oid,
                                  "label": op_labels[oid]})
 
-    depth_limited, truncated = (int(x) for x in r.line().split())
-    if truncated:
+    depth_limited, trunc_reason = (int(x) for x in r.line().split())
+    if trunc_reason:
         tkey = r.blob(int(r.line()))
-        reason = f"max_nodes={max_nodes}"
+        reason = (f"max_nodes={max_nodes}" if trunc_reason == 1
+                  else f"time_limit={time_limit}")
         if on_limit == "raise":
             raise RuntimeError(f"{reason} reached at value={tkey}")
         warnings.warn(
