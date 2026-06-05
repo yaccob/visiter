@@ -7,9 +7,14 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  # Core: pure-Python plus the inline Rust callbacks (lang="rust" needs only
+  # rustc, not the native extension). Runs the full demo set, including
+  # demos/rust/*.
+  core:
+    name: core (py ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.9", "3.12", "3.13"]
     steps:
@@ -20,18 +25,63 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y graphviz
 
-      - name: Install dependencies
+      - name: Install
         run: |
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install -e ".[dev]"
+          # Mark the venv as ready so `make` targets use it instead of
+          # recreating it with the pinned interpreter (PYTHON?=python3.12,
+          # which is not installed in the 3.9/3.13 jobs).
+          touch .venv/.installed
 
       - name: Run tests
         run: .venv/bin/pytest
 
       - name: Run demos
+        run: PATH="$(pwd)/.venv/bin:$PATH" make demo
+
+  # Optional native engine (PyO3) + columnar storage (pyarrow). pyarrow no
+  # longer ships 3.9 wheels, so this job covers the versions it supports.
+  native-storage:
+    name: native + storage (py ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+
+      - name: Install (+ storage, maturin)
         run: |
-          PATH="$(pwd)/.venv/bin:$PATH" make demo
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ".[dev,storage]" "maturin>=1.0,<2.0"
+          touch .venv/.installed
+
+      - name: Build native engine
+        run: |
+          cd native
+          VIRTUAL_ENV="$GITHUB_WORKSPACE/.venv" \
+            "$GITHUB_WORKSPACE/.venv/bin/maturin" develop --release
+
+      - name: Run tests (incl. native engine + storage)
+        run: .venv/bin/pytest
