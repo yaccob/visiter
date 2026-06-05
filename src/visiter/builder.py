@@ -221,10 +221,11 @@ def viter(iterable, *, match=Match.ALL, **options):
     internal build() call when the chain is materialized.
 
     `engine` selects the BFS backend: "auto" (default) uses the optional
-    native engine when it is installed and the build is unbounded
-    (max_depth/max_nodes/time_limit unset, no bound), else pure Python;
+    native engine whenever it is installed (it handles the full build,
+    max_depth/max_nodes/time_limit/bound included), else pure Python;
     "native" requires it; "python" forces pure Python. The native path
-    produces a byte-identical Graph — pure Python is always available.
+    produces a byte-identical Graph for the deterministic limits (time_limit
+    is best-effort) — pure Python is always available.
 
     `lang="rust"` (Path B) switches the chain to inline Rust-expression
     callbacks: `.case()` / `.default()` / `bound=` / `tags=` then take Rust

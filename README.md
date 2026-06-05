@@ -120,9 +120,9 @@ the same graph, byte-for-byte:
 
 - **Native engine** (`engine="auto"`, the default once present).
   `pip install "visiter[native]"` pulls a prebuilt wheel that runs the BFS
-  bookkeeping natively for unbounded builds while keeping your Python
-  callbacks (or `make native` to build it locally). Falls back to pure Python
-  when absent.
+  bookkeeping natively — for every build, bounded or not — while keeping your
+  Python callbacks (or `make native` to build it locally). Falls back to pure
+  Python when absent.
 - **Inline Rust callbacks** (`lang="rust"`) — for when the *callbacks* are
   the bottleneck. `.case()` takes Rust expression strings (value bound to
   `s`), compiled on the fly with `rustc` and run natively:

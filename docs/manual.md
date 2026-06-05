@@ -53,11 +53,13 @@ internal graph-construction step when the chain is materialized.
   strings but should be treated numerically (`Fraction`, `Decimal`,
   `sympy.Rational`).
 - `engine` — BFS backend selection (optional native acceleration; see
-  section 8). `"auto"` (default) uses the native engine when the
-  `visiter_native` extension is installed *and* the build is unbounded
-  (`max_depth`/`max_nodes`/`time_limit` unset, no `bound`), else pure
+  section 8). `"auto"` (default) uses the native engine whenever the
+  `visiter_native` extension is installed — it handles the full build,
+  `max_depth`/`max_nodes`/`time_limit`/`bound` included — else pure
   Python. `"native"` requires it (raises otherwise); `"python"` forces
-  pure Python. The native path produces a byte-identical graph.
+  pure Python. The native path produces a byte-identical graph for the
+  deterministic limits; `time_limit` is best-effort (the wall-clock cut
+  point is non-deterministic, exactly as in pure Python).
 - `lang` — callback language (see section 8). `"python"` (default) takes
   Python callables in `.case()`/`.default()`. `"rust"` switches to inline
   Rust expression *strings* (value bound to `s`), compiled on the fly with
@@ -1017,23 +1019,26 @@ pip install "visiter[native]"   # prebuilt wheel
 make native                     # or build it locally (needs a Rust toolchain)
 ```
 
-Once installed, `engine="auto"` (the default) routes **unbounded** builds
-(`max_depth=None`, `max_nodes=None`, no `bound`) through the native engine and
-everything else through pure Python. The native engine calls your Python
-callables per node (via PyO3) but replaces the `str(value)` keying and dict
-bookkeeping with native hashing and a compact layout.
+Once installed, `engine="auto"` (the default) routes **every** build through the
+native engine and only falls back to pure Python when the extension is absent.
+The native engine handles the full semantics — `max_depth`/`max_nodes`/`bound`
+truncation and pseudo-edges included — calling your Python callables per node
+(via PyO3) while replacing the `str(value)` keying and dict bookkeeping with
+native hashing and a compact layout.
 
 ```python
-# Native when the extension is present and the build is unbounded; else Python.
+# Native when the extension is present (bounded or not); else pure Python.
 viter([(0, 0)], max_depth=None, max_nodes=None, engine="auto")  # default
-viter(10, max_depth=None, engine="native")   # require native; raise if absent
-viter(10, engine="python")                    # always pure Python
+viter([(0, 0)], max_depth=8, engine="auto")   # bounded — also native
+viter(10, engine="native")                     # require native; raise if absent
+viter(10, engine="python")                     # always pure Python
 ```
 
-`engine="native"` raises `RuntimeError` when the extension is missing **or** the
-build uses features outside the unbounded subset. `engine="auto"` silently falls
-back. The native path keeps `tags`, `key_type`, `OpResult`, `Match.FIRST`, and
-`default` working and yields the same graph dict.
+`engine="native"` raises `RuntimeError` only when the extension is missing;
+`engine="auto"` silently falls back to pure Python in that case. The native path
+keeps `tags`, `key_type`, `OpResult`, `Match.FIRST`, `default`, and the bounded
+limits working and yields the same graph dict (byte-identical for the
+deterministic limits; `time_limit` is best-effort).
 
 ### Path B — `lang="rust"` (inline Rust-expression callbacks)
 

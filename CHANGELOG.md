@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **The native engine (Path A) now accelerates bounded builds too.** Previously
+  `engine="auto"` only used `visiter_native` for unbounded builds and silently
+  fell back to pure Python whenever `max_depth`, `max_nodes`, `time_limit` or a
+  `bound` predicate was set — so capping a build to keep it tractable was exactly
+  what *disabled* the speedup, and the default `max_depth=64`/`max_nodes=1024`
+  meant the native path almost never engaged. The native BFS now implements the
+  full bounded semantics (`max_depth`/`bound` pseudo-edges, `max_nodes`
+  truncation) and `engine="auto"` uses native whenever the extension is
+  installed. Output stays byte-identical to pure Python for the deterministic
+  limits; `time_limit` is best-effort (the wall-clock cut point is
+  non-deterministic, as it already is in pure Python). `engine="native"` now
+  raises only when the extension is missing, not for bounded builds.
+
 ## [0.16.0] — 2026-06-05
 
 ### Added

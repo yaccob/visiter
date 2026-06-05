@@ -483,10 +483,11 @@ The two accelerators target two different costs:
 
 - **Slow *bookkeeping*, cheap callbacks** → the native engine. Build the
   optional extension once with `make native` (needs a Rust toolchain), then
-  it kicks in automatically for unbounded builds:
+  it kicks in automatically for every build — bounded or not:
 
   ```python
   viter([(0, 0)], max_depth=None, max_nodes=None)  # engine="auto" by default
+  viter([(0, 0)], max_depth=8)                      # bounded — also native
   ```
 
   If the extension isn't installed, you get pure Python — nothing breaks.

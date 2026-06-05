@@ -397,28 +397,29 @@ def build(start, rules, default, *, max_depth=64,
                         f"got {type(default).__name__}")
 
     # Optional native acceleration (Path A / ①). `engine`:
-    #   "auto"   — use the native engine when it is installed AND the build is
-    #              within its supported (unbounded) subset; else pure Python.
-    #   "native" — require it; raise if unavailable or unsupported.
+    #   "auto"   — use the native engine whenever it is installed; else pure
+    #              Python. The native engine handles the full build semantics
+    #              (max_depth/max_nodes/time_limit/bound included).
+    #   "native" — require it; raise if the extension is not installed.
     #   "python" — always pure Python.
-    # The native path produces a byte-identical Graph for the subset; pure
+    # The native path produces a byte-identical Graph for the deterministic
+    # limits; time_limit is best-effort (wall-clock dependent cut point). Pure
     # Python remains the always-available baseline.
     if engine not in ("auto", "native", "python"):
         raise ValueError(
             f"engine must be 'auto', 'native', or 'python'; got {engine!r}")
     if engine != "python":
         from . import _accel
-        if _accel.supports(rules, max_depth=max_depth,
-                           max_nodes=max_nodes, time_limit=time_limit):
-            return _accel.native_build(start, rules, default,
-                                       tags=tags, key_type=key_type)
+        if _accel.supports(rules):
+            return _accel.native_build(
+                start, rules, default, tags=tags, key_type=key_type,
+                max_depth=max_depth, max_nodes=max_nodes,
+                time_limit=time_limit, on_limit=on_limit)
         if engine == "native":
             raise RuntimeError(
-                "engine='native' requested but unavailable: either the "
-                "visiter_native extension is not installed, or the build uses "
-                "features outside the native subset (max_depth/max_nodes/"
-                "time_limit/bound must all be unset). Build it with "
-                "'make native', or use engine='auto'/'python'.")
+                "engine='native' requested but the visiter_native extension "
+                "is not installed. Build it with 'make native', or use "
+                "engine='auto'/'python'.")
 
     op_order = []
     op_labels = {}

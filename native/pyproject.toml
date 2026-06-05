@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "visiter_native"
-version = "0.1.0"
+version = "0.2.0"
 description = "Optional native BFS engine for visiter (engine='native')."
 readme = "README.md"
 license = { text = "MIT" }

@@ -34,13 +34,13 @@ test: setup
 
 # Optional native acceleration (Path A / ①). Requires a Rust toolchain.
 # Builds the visiter_native extension into the venv; once present, build()
-# uses it automatically for unbounded graphs (engine="auto"). visiter works
-# without this — pure Python is the always-available fallback.
+# uses it automatically (engine="auto") for every build, bounded or not.
+# visiter works without this — pure Python is the always-available fallback.
 native: setup
 	@command -v cargo >/dev/null || { echo "native engine requires a Rust toolchain (cargo) on PATH"; exit 1; }
 	$(VENV_BIN)/pip install -q "maturin>=1.0,<2.0"
 	cd "$(CURDIR)/native" && VIRTUAL_ENV="$(CURDIR)/$(VENV)" "$(CURDIR)/$(VENV_BIN)/maturin" develop --release
-	@echo "native engine installed — build() now uses it for unbounded graphs"
+	@echo "native engine installed — build() now uses it for all graphs"
 
 demo: setup
 	@command -v dot >/dev/null || { echo "demos require 'dot' (Graphviz) on PATH"; exit 1; }
