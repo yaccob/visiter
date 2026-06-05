@@ -124,13 +124,14 @@ the same graph, byte-for-byte:
   Python callbacks (or `make native` to build it locally). Falls back to pure
   Python when absent.
 - **Inline Rust callbacks** (`lang="rust"`) — for when the *callbacks* are
-  the bottleneck. `.case()` takes Rust expression strings (value bound to
-  `s`), compiled on the fly with `rustc` and run natively:
+  the bottleneck. `.case()` takes Rust expression strings (value bound to the
+  name you pass as the required `bind=`), compiled on the fly with `rustc` and
+  run natively:
 
   ```python
-  (viter(10, lang="rust")
-   .case("s >= 1", "s - 1", label="take 1")
-   .case("s >= 2", "s - 2", label="take 2")
+  (viter(10, lang="rust", bind="n")
+   .case("n >= 1", "n - 1", label="take 1")
+   .case("n >= 2", "n - 2", label="take 2")
    .render())
   ```
 

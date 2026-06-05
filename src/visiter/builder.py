@@ -82,8 +82,9 @@ class Builder:
 
         `label_rs` is the `lang="rust"` analogue of returning an
         ``OpResult`` from `fn`: a Rust expression string (value bound to
-        ``s``) that computes the per-edge label for each firing of this
-        case. It is rejected in the Python path — use ``OpResult`` there.
+        the chain's ``bind=`` name) that computes the per-edge label for
+        each firing of this case. It is rejected in the Python path — use
+        ``OpResult`` there.
         """
         return self._with(cases=self._cases + (
             _Case(condition, fn, label, id, bound, exclusive, label_rs),))
@@ -155,8 +156,9 @@ class Builder:
             d = self._default
             default_op = Op(d.fn, label=d.label, id=d.id)
 
-        # `lang`/`consts` are Builder-level (Path B) options, not build() kwargs.
-        skip = {"match", "lang", "consts"}
+        # `lang`/`consts`/`bind` are Builder-level (Path B) options, not build()
+        # kwargs.
+        skip = {"match", "lang", "consts", "bind"}
         build_kwargs = {k: v for k, v in self._options.items() if k not in skip}
         if isinstance(build_kwargs.get("on_limit"), OnLimit):
             build_kwargs["on_limit"] = build_kwargs["on_limit"].value
@@ -167,7 +169,8 @@ class Builder:
         """Path B: compile the Rust-string cases and run the native BFS.
 
         ``.case()`` / ``.default()`` / ``bound=`` / ``tags=`` / ``label_rs=``
-        carried Rust expression strings (value bound to ``s``). Defaults,
+        carried Rust expression strings (value bound to the chain's required
+        ``bind=`` name). Defaults,
         bounds, ``time_limit`` and per-call labels (``label_rs``, the
         ``OpResult`` analogue) match the Python path exactly (``max_depth=64``,
         ``max_nodes=1024``), including ghost-stub pseudo-edges.
@@ -197,6 +200,7 @@ class Builder:
             default = (d.fn, d.label, d.id, d.label_rs)
 
         return build_rust(starts, cases, default,
+                          bind=self._options.get("bind"),
                           consts=self._options.get("consts"),
                           key_type=self._options.get("key_type"),
                           tags=self._options.get("tags"),
@@ -229,7 +233,8 @@ def viter(iterable, *, match=Match.ALL, **options):
 
     `lang="rust"` (Path B) switches the chain to inline Rust-expression
     callbacks: `.case()` / `.default()` / `bound=` / `tags=` then take Rust
-    expression *strings* (the current value is bound to `s`) which are compiled
+    expression *strings* (the current value is bound to the name given by the
+    required `bind=` option, e.g. `bind="n"`) which are compiled
     on the fly with `rustc` and run natively. `consts={"N": ...}` injects i64
     constants the expressions can reference. It is a drop-in — same chain, same
     graph (bounds, ghost stubs, tags and all). Requires `rustc` on PATH;

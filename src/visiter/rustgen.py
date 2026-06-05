@@ -2,7 +2,8 @@
 
 When a chain is started with ``viter(..., lang="rust")``, the ``.case()`` /
 ``.default()`` / ``bound=`` / ``tags=`` arguments are **Rust expression strings**
-(the current value is bound to ``s``) instead of Python callables. At
+(the current value is bound to the name given by the chain's required ``bind=``
+option) instead of Python callables. At
 ``.build()`` time the expressions are spliced into a fixed Rust BFS engine,
 compiled once with ``rustc`` (cached on a hash of the generated source), and run
 natively. The resulting graph is byte-identical to the pure-Python build —
@@ -23,6 +24,7 @@ divergence.
 """
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -31,6 +33,37 @@ from fractions import Fraction
 from pathlib import Path
 
 _CACHE = Path(tempfile.gettempdir()) / "visiter-rustgen-cache"
+
+# The fixed, unique parameter every generated callback takes. The chain's bind=
+# name is re-exposed from it via a `let`, so the bind name never has to dodge
+# the engine's internal symbols — it can be any valid Rust identifier (it only
+# shadows a same-named helper inside its own expression).
+_BIND_PARAM = "__viter_value"
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Rust keywords (2021 strict + reserved); a `let <kw> = …` rebind won't compile,
+# so reject them up front with a clearer message than rustc's. This set is
+# fixed by the language, not by the engine, so it never grows with internals.
+_RUST_KEYWORDS = frozenset("""
+    as break const continue crate dyn else enum extern false fn for if impl in
+    let loop match mod move mut pub ref return self Self static struct super
+    trait true type unsafe use where while async await
+    abstract become box do final macro override priv typeof unsized virtual
+    yield try
+""".split())
+
+
+def _check_bind(bind):
+    """Reject a ``bind=`` that cannot name the bound value in Rust."""
+    if bind is None:
+        raise ValueError(
+            'lang="rust" requires a bind= name for the current value, e.g. '
+            'viter(..., lang="rust", bind="n"); there is no default')
+    if not isinstance(bind, str) or bind == "_" or not _IDENT_RE.match(bind):
+        raise ValueError(
+            f"bind={bind!r} is not a valid Rust identifier for the bound value")
+    if bind in _RUST_KEYWORDS:
+        raise ValueError(f"bind={bind!r} is a Rust keyword; pick another name")
 
 # Rational state values need num-bigint/num-rational, which bare rustc cannot
 # fetch, so they compile through cargo. The shared target dir means the deps
@@ -223,7 +256,7 @@ fn main() {{
 """
 
 
-def _render_source(starts, cases, default, consts, tag_items, vt):
+def _render_source(starts, cases, default, consts, tag_items, vt, bind):
     ptype, vtype = vt["ptype"], vt["vtype"]
     copy = vt["copy"]
     carg = "s" if copy else "&s"        # call arg for the bound value `s`
@@ -235,30 +268,40 @@ def _render_source(starts, cases, default, consts, tag_items, vt):
 
     const_lines = "\n".join(f"const {k}: i64 = {v};" for k, v in consts.items())
 
+    # Every user callback takes the fixed internal param and rebinds it to the
+    # chain's bind= name, so the expressions read from `bind` while the bind
+    # name stays decoupled from the engine's own symbols. No textual rewriting
+    # of the expressions — rustc keeps identifiers and string literals apart.
+    p = _BIND_PARAM
+    rebind = f"let {bind} = {p};"
+
     cb = []
     op_label_rs = []   # op index -> label_rs expr (per-call label) or None
     for i, (cond, op, _l, _id, bound, _ex, lrs) in enumerate(cases):
-        cb.append(f"#[inline(always)] fn cond{i}(s: {ptype}) -> bool {{ ({cond}) }}")
-        cb.append(f"#[inline(always)] fn op{i}(s: {ptype}) -> V {{ ({op}) }}")
+        cb.append(f"#[inline(always)] fn cond{i}({p}: {ptype}) -> bool "
+                  f"{{ {rebind} ({cond}) }}")
+        cb.append(f"#[inline(always)] fn op{i}({p}: {ptype}) -> V "
+                  f"{{ {rebind} ({op}) }}")
         if bound is not None:
-            cb.append(f"#[inline(always)] fn bound{i}(s: {ptype}) -> bool "
-                      f"{{ ({bound}) }}")
+            cb.append(f"#[inline(always)] fn bound{i}({p}: {ptype}) -> bool "
+                      f"{{ {rebind} ({bound}) }}")
         if lrs is not None:
-            cb.append(f"#[inline(always)] fn label{i}(s: {ptype}) -> String "
-                      f"{{ ({lrs}) }}")
+            cb.append(f"#[inline(always)] fn label{i}({p}: {ptype}) -> String "
+                      f"{{ {rebind} ({lrs}) }}")
         op_label_rs.append(lrs)
     if default is not None:
         # The default op gets index len(cases); name it op{n} so the generated
         # visit code (which calls op{op_idx}) resolves it.
         di = len(cases)
-        cb.append(f"#[inline(always)] fn op{di}(s: {ptype}) -> V "
-                  f"{{ ({default[0]}) }}")
+        cb.append(f"#[inline(always)] fn op{di}({p}: {ptype}) -> V "
+                  f"{{ {rebind} ({default[0]}) }}")
         if default[3] is not None:
-            cb.append(f"#[inline(always)] fn label{di}(s: {ptype}) -> String "
-                      f"{{ ({default[3]}) }}")
+            cb.append(f"#[inline(always)] fn label{di}({p}: {ptype}) -> String "
+                      f"{{ {rebind} ({default[3]}) }}")
         op_label_rs.append(default[3])
     for j, (_name, expr) in enumerate(tag_items):
-        cb.append(f"#[inline(always)] fn tag{j}(s: {ptype}) -> bool {{ ({expr}) }}")
+        cb.append(f"#[inline(always)] fn tag{j}({p}: {ptype}) -> bool "
+                  f"{{ {rebind} ({expr}) }}")
 
     tag_checks = " ".join(f"if tag{j}(s) {{ b |= {1 << j}u32; }}"
                           for j in range(len(tag_items)))
@@ -321,7 +364,8 @@ def _compile_error(src, stderr):
     return RuntimeError(
         "Rust compilation of the generated callbacks failed — a Rust "
         "expression in .case()/.default()/bound=/tags= is likely invalid "
-        f"(the value is bound to `s`). Generated source:\n  {src}\n\n{stderr}")
+        "(the value is bound to the chain's `bind=` name). "
+        f"Generated source:\n  {src}\n\n{stderr}")
 
 
 def _compile(source, needs_cargo=False):
@@ -384,17 +428,20 @@ class _Reader:
         return out.decode("utf-8")
 
 
-def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
-               max_depth=64, max_nodes=1024, time_limit=None, on_limit="stop"):
+def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
+               tags=None, max_depth=64, max_nodes=1024, time_limit=None,
+               on_limit="stop"):
     """Compile the Rust-string cases and run the native BFS → Graph.
 
     *cases* is a list of ``(cond, op, label, id, bound, exclusive)``; *default*
-    is ``(op, label, id)`` or None; *tags* is a ``dict[str, rust_expr]``.
+    is ``(op, label, id)`` or None; *tags* is a ``dict[str, rust_expr]``. *bind*
+    is the (required) identifier the expressions read the current value from.
     Mirrors ``visiter.iteration.build`` semantics for the supported subset.
     """
     from .graph import Graph
     consts = consts or {}
     tags = tags or {}
+    _check_bind(bind)
     if not starts:
         raise ValueError("lang='rust' needs at least one start value")
     vt = _value_type(starts[0])
@@ -413,7 +460,7 @@ def build_rust(starts, cases, default, *, consts=None, key_type=None, tags=None,
         op_ids.append(oid)
         op_labels.setdefault(oid, dlabel if dlabel is not None else dop)
 
-    source = _render_source(starts, cases, default, consts, tag_items, vt)
+    source = _render_source(starts, cases, default, consts, tag_items, vt, bind)
     binary = _compile(source, vt.get("needs_cargo", False))
     md = -1 if max_depth is None else int(max_depth)
     mn = -1 if max_nodes is None else int(max_nodes)

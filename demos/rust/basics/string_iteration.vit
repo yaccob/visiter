@@ -2,15 +2,15 @@
 # Iteration on strings, not numbers — the lang="rust" counterpart of
 # python/basics/string_iteration.vit, producing a byte-for-byte identical SVG.
 # Rule: if the word ends in a vowel, drop the last character. Words ending in a
-# consonant are leaves (no case matches). The value is bound to `s` (an &str);
-# the op returns a new String.
+# consonant are leaves (no case matches). The value is bound to `w` (named via
+# bind=, an &str); the op returns a new String.
 #
 # Demonstrates that Path B handles str states, not just numbers, with the same
 # graph the Python demo produces.
 #
 # Usage:
 #   viter demos/rust/basics/string_iteration.vit
-(viter(["banana", "garage", "queue", "iterator"], lang="rust")
- .case('!s.is_empty() && "aeiou".contains(s.chars().last().unwrap())',
-       's[..s.len() - 1].to_string()', label="drop-vowel")
+(viter(["banana", "garage", "queue", "iterator"], lang="rust", bind="w")
+ .case('!w.is_empty() && "aeiou".contains(w.chars().last().unwrap())',
+       'w[..w.len() - 1].to_string()', label="drop-vowel")
  .render())

@@ -36,7 +36,7 @@ def test_parity_nim_match_all():
                  .case(lambda n: n >= 1, lambda n: n - 1, label="t1", id="o1")
                  .case(lambda n: n >= 2, lambda n: n - 2, label="t2", id="o2")
                  .case(lambda n: n >= 3, lambda n: n - 3, label="t3", id="o3")),
-        lambda: (viter(10, max_depth=None, max_nodes=None, lang="rust")
+        lambda: (viter(10, max_depth=None, max_nodes=None, lang="rust", bind="s")
                  .case("s >= 1", "s - 1", label="t1", id="o1")
                  .case("s >= 2", "s - 2", label="t2", id="o2")
                  .case("s >= 3", "s - 3", label="t3", id="o3")))
@@ -53,7 +53,7 @@ def test_parity_grid_tuples_with_consts():
                  .case(lambda s: s[1] < side - 1, lambda s: (s[0], s[1] + 1),
                        label="U", id="U")),
         lambda: (viter([(0, 0)], max_depth=None, max_nodes=None, lang="rust",
-                       consts={"N": side})
+                       bind="s", consts={"N": side})
                  .case("s.0 < N - 1", "(s.0 + 1, s.1)", label="R", id="R")
                  .case("s.1 < N - 1", "(s.0, s.1 + 1)", label="U", id="U")))
 
@@ -66,7 +66,7 @@ def test_parity_match_first_exclusive():
                  .case(lambda n: n >= 1, lambda n: n - 1, label="a", id="a")
                  .case(lambda n: n >= 2, lambda n: n - 2, label="b", id="b")),
         lambda: (viter(10, max_depth=None, max_nodes=None, lang="rust",
-                       match=Match.FIRST)
+                       bind="s", match=Match.FIRST)
                  .case("s >= 1", "s - 1", label="a", id="a")
                  .case("s >= 2", "s - 2", label="b", id="b")))
 
@@ -79,7 +79,7 @@ def test_parity_default_branch():
                        label="half", id="half")
                  .default(lambda n: n - 1 if n > 0 else n, label="dec",
                           id="dec")),
-        lambda: (viter([6], max_depth=None, max_nodes=None, lang="rust")
+        lambda: (viter([6], max_depth=None, max_nodes=None, lang="rust", bind="s")
                  .case("s % 2 == 0 && s > 0", "s / 2", label="half", id="half")
                  .default("if s > 0 { s - 1 } else { s }", label="dec",
                           id="dec")))
@@ -95,7 +95,7 @@ def test_parity_default_max_depth_on_infinite_space():
     _assert_parity(
         lambda: (viter(0, engine="python")
                  .case(lambda s: True, lambda s: s + 1, label="inc", id="inc")),
-        lambda: (viter(0, lang="rust")
+        lambda: (viter(0, lang="rust", bind="s")
                  .case("true", "s + 1", label="inc", id="inc")))
 
 
@@ -104,7 +104,7 @@ def test_parity_explicit_max_depth_pseudo_edges():
     _assert_parity(
         lambda: (viter(0, max_depth=5, engine="python")
                  .case(lambda s: True, lambda s: s + 1, label="inc", id="inc")),
-        lambda: (viter(0, max_depth=5, lang="rust")
+        lambda: (viter(0, max_depth=5, lang="rust", bind="s")
                  .case("true", "s + 1", label="inc", id="inc")))
 
 
@@ -113,7 +113,7 @@ def test_parity_max_nodes_truncation():
     _assert_parity(
         lambda: (viter(0, max_nodes=10, max_depth=None, engine="python")
                  .case(lambda s: True, lambda s: s + 1, label="i", id="i")),
-        lambda: (viter(0, max_nodes=10, max_depth=None, lang="rust")
+        lambda: (viter(0, max_nodes=10, max_depth=None, lang="rust", bind="s")
                  .case("true", "s + 1", label="i", id="i")))
 
 
@@ -125,7 +125,7 @@ def test_parity_bound_predicate_pseudo_edges():
         lambda: (viter(0, max_depth=None, engine="python")
                  .case(lambda s: s < 10, lambda s: s + 1,
                        bound=lambda s: s < 5, label="i", id="i")),
-        lambda: (viter(0, max_depth=None, lang="rust")
+        lambda: (viter(0, max_depth=None, lang="rust", bind="s")
                  .case("s < 10", "s + 1", bound="s < 5", label="i", id="i")))
 
 
@@ -136,7 +136,7 @@ def test_parity_string_values_and_tags():
                        tags={"hl": lambda s: len(s) % 2 == 0})
                  .case(lambda s: len(s) < 6, lambda s: s + "a",
                        label="grow", id="grow")),
-        lambda: (viter("a", max_depth=4, lang="rust",
+        lambda: (viter("a", max_depth=4, lang="rust", bind="s",
                        tags={"hl": "s.len() % 2 == 0"})
                  .case("s.len() < 6", 's.to_string() + "a"',
                        label="grow", id="grow")))
@@ -148,15 +148,73 @@ def test_parity_match_first_with_max_depth():
         lambda: (viter(20, max_depth=4, match=Match.FIRST, engine="python")
                  .case(lambda n: n % 2 == 0, lambda n: n // 2, label="h", id="h")
                  .case(lambda n: True, lambda n: n - 1, label="d", id="d")),
-        lambda: (viter(20, max_depth=4, match=Match.FIRST, lang="rust")
+        lambda: (viter(20, max_depth=4, match=Match.FIRST, lang="rust", bind="s")
                  .case("s % 2 == 0", "s / 2", label="h", id="h")
                  .case("true", "s - 1", label="d", id="d")))
 
 
 @rustc
+def test_bind_custom_name_parity():
+    # The bound value's identifier is chosen via bind=; the name must not change
+    # the resulting graph (it only renames the value the expressions read from).
+    _assert_parity(
+        lambda: (viter(10, max_depth=None, max_nodes=None, engine="python",
+                       tags={"hl": lambda n: n % 4 == 0})
+                 .case(lambda n: n >= 1, lambda n: n - 1, label="t1", id="o1")
+                 .case(lambda n: n >= 2, lambda n: n - 2, label="t2", id="o2")),
+        lambda: (viter(10, max_depth=None, max_nodes=None, lang="rust",
+                       bind="n", tags={"hl": "n % 4 == 0"})
+                 .case("n >= 1", "n - 1", label="t1", id="o1")
+                 .case("n >= 2", "n - 2", label="t2", id="o2")))
+
+
+@rustc
+def test_bind_tuple_member_access_parity():
+    # A custom bind name also threads through tuple member access (bind.0,
+    # bind.1), bound predicates and the default branch.
+    _assert_parity(
+        lambda: (viter([(0, 0)], max_depth=4, engine="python")
+                 .case(lambda p: p[0] < 3, lambda p: (p[0] + 1, p[1]),
+                       label="R", id="R")
+                 .default(lambda p: (p[0], p[1] + 1), label="U", id="U")),
+        lambda: (viter([(0, 0)], max_depth=4, lang="rust", bind="p")
+                 .case("p.0 < 3", "(p.0 + 1, p.1)", label="R", id="R")
+                 .default("(p.0, p.1 + 1)", label="U", id="U")))
+
+
+@rustc
+def test_bind_name_matching_internal_helper_is_allowed():
+    # `key` used to be a reserved name; with the fixed internal param it is just
+    # a normal bind name now (it only shadows the helper inside its expression,
+    # which here doesn't call it), so the graph still matches the Python build.
+    _assert_parity(
+        lambda: (viter(5, max_depth=None, engine="python")
+                 .case(lambda key: key >= 1, lambda key: key - 1,
+                       label="dec", id="dec")),
+        lambda: (viter(5, max_depth=None, lang="rust", bind="key")
+                 .case("key >= 1", "key - 1", label="dec", id="dec")))
+
+
+def test_bind_required_for_rust():
+    with pytest.raises(ValueError, match="requires a bind="):
+        (viter(5, lang="rust").case("true", "s").build())
+
+
+def test_bind_invalid_identifier_rejected():
+    with pytest.raises(ValueError, match="valid Rust identifier"):
+        (viter(5, lang="rust", bind="2x").case("true", "x").build())
+
+
+def test_bind_keyword_rejected():
+    with pytest.raises(ValueError, match="Rust keyword"):
+        (viter(5, lang="rust", bind="match").case("true", "match").build())
+
+
+@rustc
 def test_expression_is_default_label_and_id():
     # With no explicit label/id, the Rust expression itself is both.
-    g = (viter(3, max_depth=None, lang="rust").case("s >= 1", "s - 1").build())
+    g = (viter(3, max_depth=None, lang="rust", bind="s")
+         .case("s >= 1", "s - 1").build())
     assert g["op_order"] == ["s - 1"]
     assert g["op_labels"] == {"s - 1": "s - 1"}
     assert g["edges"][0]["label"] == "s - 1"
@@ -173,7 +231,7 @@ def test_parity_golden_ratio_rational():
                        engine="python")
                  .case(lambda x: True, lambda x: 1 + 1 / x, label="g", id="g")),
         lambda: (viter([Fraction(1)], max_depth=7, key_type="number",
-                       lang="rust")
+                       lang="rust", bind="s")
                  .case("true", "r(1) + s.recip()", label="g", id="g")))
 
 
@@ -185,7 +243,7 @@ def test_parity_time_limit_not_hit():
                        time_limit="01:00:00", engine="python")
                  .case(lambda n: n >= 1, lambda n: n - 1, label="t", id="t")),
         lambda: (viter(10, max_depth=None, max_nodes=None,
-                       time_limit="01:00:00", lang="rust")
+                       time_limit="01:00:00", lang="rust", bind="s")
                  .case("s >= 1", "s - 1", label="t", id="t")))
 
 
@@ -196,7 +254,7 @@ def test_parity_time_limit_zero_truncates():
     kw = dict(max_depth=None, max_nodes=None, time_limit="00:00:00")
     py = (viter(10, engine="python", **kw)
           .case(lambda n: n >= 1, lambda n: n - 1, label="t", id="t").build())
-    rs = (viter(10, lang="rust", **kw)
+    rs = (viter(10, lang="rust", bind="s", **kw)
           .case("s >= 1", "s - 1", label="t", id="t").build())
     assert py == rs
     assert py["nodes"] == {}
@@ -212,7 +270,7 @@ def test_parity_opresult_per_call_labels():
                  .case(lambda n: n >= 1,
                        lambda n: OpResult(n - 1, label=f"-1 from {n}"),
                        label="dec", id="dec")),
-        lambda: (viter(5, max_depth=2, lang="rust")
+        lambda: (viter(5, max_depth=2, lang="rust", bind="s")
                  .case("s >= 1", "s - 1", label="dec", id="dec",
                        label_rs='format!("-1 from {}", s)')))
 
@@ -227,4 +285,4 @@ def test_label_rs_rejected_in_python_path():
 
 def test_rust_rejects_unsupported_value_type():
     with pytest.raises(ValueError, match="int, tuple"):
-        (viter([1.5], lang="rust").case("true", "s").build())
+        (viter([1.5], lang="rust", bind="s").case("true", "s").build())

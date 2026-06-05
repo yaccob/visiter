@@ -5,15 +5,15 @@
 # SVG is byte-for-byte identical to the Python demo's.
 #
 # In lang="rust" mode, .case()/.default()/tags= take Rust expression strings
-# instead of Python lambdas; the current value is bound to `s`, and a case's
-# expression doubles as the edge label/id when none is given. The highlight tag
-# (multiples of 4 — the winning positions) is a Rust predicate over `s` too.
-# Requires rustc on PATH.
+# instead of Python lambdas; the current value is bound to the name given by
+# bind= (here `n`), and a case's expression doubles as the edge label/id when
+# none is given. The highlight tag (multiples of 4 — the winning positions) is
+# a Rust predicate over `n` too. Requires rustc on PATH.
 #
 # Usage:
 #   viter demos/rust/basics/nim.vit
-(viter(10, lang="rust", tags={"highlight": "s % 4 == 0"})
- .case("s >= 1", "s - 1", label="take 1")
- .case("s >= 2", "s - 2", label="take 2")
- .case("s >= 3", "s - 3", label="take 3")
+(viter(10, lang="rust", bind="n", tags={"highlight": "n % 4 == 0"})
+ .case("n >= 1", "n - 1", label="take 1")
+ .case("n >= 2", "n - 2", label="take 2")
+ .case("n >= 3", "n - 3", label="take 3")
  .render())

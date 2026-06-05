@@ -494,12 +494,13 @@ The two accelerators target two different costs:
 
 - **Slow *callbacks*** (the case where moving only the bookkeeping barely
   helps) → write the callbacks in Rust, inline, with `lang="rust"`. The
-  current value is bound to `s`, and the expression compiles on the fly:
+  current value is bound to the name you pass as the required `bind=`, and the
+  expression compiles on the fly:
 
   ```python
-  (viter(10, lang="rust")
-   .case("s >= 1", "s - 1", label="take 1")
-   .case("s >= 2", "s - 2", label="take 2")
+  (viter(10, lang="rust", bind="n")
+   .case("n >= 1", "n - 1", label="take 1")
+   .case("n >= 2", "n - 2", label="take 2")
    .render())
   ```
 

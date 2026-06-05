@@ -62,10 +62,14 @@ internal graph-construction step when the chain is materialized.
   point is non-deterministic, exactly as in pure Python).
 - `lang` — callback language (see section 8). `"python"` (default) takes
   Python callables in `.case()`/`.default()`. `"rust"` switches to inline
-  Rust expression *strings* (value bound to `s`), compiled on the fly with
-  `rustc` and run natively.
+  Rust expression *strings* (value bound to the `bind=` name), compiled on
+  the fly with `rustc` and run natively.
 - `consts` — only with `lang="rust"`: a `dict[str, int]` of `i64`
   constants the Rust expressions may reference (e.g. `consts={"N": 10}`).
+- `bind` — **required** with `lang="rust"`: the identifier the expressions
+  read the current value from (e.g. `bind="n"`). Must be a valid Rust
+  identifier (not a keyword); there is no default, and it does not affect
+  the resulting graph.
 
 ### Builder methods
 
@@ -1043,35 +1047,44 @@ deterministic limits; `time_limit` is best-effort).
 ### Path B — `lang="rust"` (inline Rust-expression callbacks)
 
 With `lang="rust"`, `.case()` / `.default()` take **Rust expression strings**
-instead of Python lambdas. The current value is bound to `s`; the expression is
-the edge label/id when no `label=`/`id=` is given. The expressions are
-co-located at the call site, compiled once with `rustc` (cached on a hash of the
-generated source), and run natively.
+instead of Python lambdas. The current value is bound to the name you pass as
+the **required** `bind=` option (e.g. `bind="n"`) — there is no implicit
+default. The expression is the edge label/id when no `label=`/`id=` is given.
+The expressions are co-located at the call site, compiled once with `rustc`
+(cached on a hash of the generated source), and run natively.
 
 ```python
 #!/usr/bin/env viter
-# Nim, with native callbacks. `s` is the current value.
-(viter(10, lang="rust")
- .case("s >= 1", "s - 1", label="take 1")
- .case("s >= 2", "s - 2", label="take 2")
- .case("s >= 3", "s - 3", label="take 3")
+# Nim, with native callbacks. `n` is the current value (named via bind=).
+(viter(10, lang="rust", bind="n")
+ .case("n >= 1", "n - 1", label="take 1")
+ .case("n >= 2", "n - 2", label="take 2")
+ .case("n >= 3", "n - 3", label="take 3")
  .render())
 ```
 
-Constants are injected with `consts=` (i64), and tuple state uses `s.0`, `s.1`:
+`bind=` must be a valid Rust identifier (and not a Rust keyword); it has no
+effect on the resulting graph. Internally the engine compiles each callback
+with a fixed, unique parameter and re-exposes it under your `bind=` name via a
+`let`, so the name is decoupled from the engine's own symbols — you can even use
+a name that matches an internal helper (it only shadows it inside its own
+expression).
+
+Constants are injected with `consts=` (i64), and tuple state uses `<bind>.0`,
+`<bind>.1`:
 
 ```python
-(viter([(0, 0)], lang="rust", consts={"A": 3, "B": 5})
- .case("s.0 < A", "(A, s.1)", label="fill A")
- .case("s.1 < B", "(s.0, B)", label="fill B")
- .case("s.0 > 0 && s.1 < B",
-       "(std::cmp::max(0, s.0 - (B - s.1)), std::cmp::min(B, s.0 + s.1))",
+(viter([(0, 0)], lang="rust", bind="j", consts={"A": 3, "B": 5})
+ .case("j.0 < A", "(A, j.1)", label="fill A")
+ .case("j.1 < B", "(j.0, B)", label="fill B")
+ .case("j.0 > 0 && j.1 < B",
+       "(std::cmp::max(0, j.0 - (B - j.1)), std::cmp::min(B, j.0 + j.1))",
        label="A->B")
  .render())
 ```
 
-`lang="rust"` is a **drop-in**: the same chain yields the same graph as the
-Python path, byte-for-byte. Requirements and scope:
+Apart from the required `bind=`, `lang="rust"` is a **drop-in**: the same chain
+yields the same graph as the Python path, byte-for-byte. Requirements and scope:
 
 - **`rustc` must be on `PATH`** (install via <https://rustup.rs>); `Fraction`
   values additionally need `cargo` (they pull `num-rational`/`num-bigint`).
@@ -1080,8 +1093,9 @@ Python path, byte-for-byte. Requirements and scope:
   cost; later builds hit the cache.
 - **State values:** `int`, `tuple`-of-`int` (arity ≥ 2), `str`, or `Fraction`
   (exact rationals), inferred from the start values. Node keys match Python's
-  `str()` exactly. Rationals bind `s` as `&BigRational` with an `r(n)` helper,
-  so e.g. golden ratio is `.case("true", "r(1) + s.recip()")`.
+  `str()` exactly. Rationals bind the value as `&BigRational` with an `r(n)`
+  helper, so e.g. golden ratio with `bind="x"` is
+  `.case("true", "r(1) + x.recip()")`.
 - **Full behavioral parity:** `max_depth`, `max_nodes` and `time_limit` apply
   with the same defaults as the Python path (64 / 1024) and produce the same
   ghost-stub pseudo-edges / truncation; `bound=` predicates, `tags=`

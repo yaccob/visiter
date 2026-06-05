@@ -2,11 +2,11 @@
 # Water-jug reachability with inline Rust callbacks (lang="rust") — the
 # counterpart of the reachability graph in python/applications/water_jugs.vit,
 # producing a byte-for-byte identical SVG (default jugs A=3, B=5, target T=4).
-# State is the tuple (a, b) bound to `s` (so `s.0`, `s.1` in the Rust
-# expressions). Capacities and target are injected as i64 consts via consts=;
-# target states (either jug holding T) are highlighted via a Rust tag predicate.
-# max_depth/max_nodes are lifted so the full reachable set is explored, matching
-# the Python demo.
+# State is the tuple (a, b) bound to `j` (named via bind=, so `j.0`, `j.1` in
+# the Rust expressions). Capacities and target are injected as i64 consts via
+# consts=; target states (either jug holding T) are highlighted via a Rust tag
+# predicate. max_depth/max_nodes are lifted so the full reachable set is
+# explored, matching the Python demo.
 #
 # The Python demo additionally writes a shortest-path subgraph via NetworkX;
 # that is an analytics step independent of the callback language and is omitted
@@ -14,17 +14,17 @@
 #
 # Usage:
 #   viter demos/rust/applications/water_jugs.vit
-(viter([(0, 0)], lang="rust", consts={"A": 3, "B": 5, "T": 4},
+(viter([(0, 0)], lang="rust", bind="j", consts={"A": 3, "B": 5, "T": 4},
        max_depth=None, max_nodes=None,
-       tags={"highlight": "s.0 == T || s.1 == T"})
- .case("s.0 < A", "(A, s.1)",                              label="fill 3L")
- .case("s.1 < B", "(s.0, B)",                              label="fill 5L")
- .case("s.0 > 0", "(0, s.1)",                              label="empty 3L")
- .case("s.1 > 0", "(s.0, 0)",                              label="empty 5L")
- .case("s.0 > 0 && s.1 < B",
-       "(std::cmp::max(0, s.0 - (B - s.1)), std::cmp::min(B, s.0 + s.1))",
+       tags={"highlight": "j.0 == T || j.1 == T"})
+ .case("j.0 < A", "(A, j.1)",                              label="fill 3L")
+ .case("j.1 < B", "(j.0, B)",                              label="fill 5L")
+ .case("j.0 > 0", "(0, j.1)",                              label="empty 3L")
+ .case("j.1 > 0", "(j.0, 0)",                              label="empty 5L")
+ .case("j.0 > 0 && j.1 < B",
+       "(std::cmp::max(0, j.0 - (B - j.1)), std::cmp::min(B, j.0 + j.1))",
        label="3L→5L")
- .case("s.1 > 0 && s.0 < A",
-       "(std::cmp::min(A, s.0 + s.1), std::cmp::max(0, s.1 - (A - s.0)))",
+ .case("j.1 > 0 && j.0 < A",
+       "(std::cmp::min(A, j.0 + j.1), std::cmp::max(0, j.1 - (A - j.0)))",
        label="5L→3L")
  .render())
