@@ -1,0 +1,17 @@
+[package]
+name = "visiter_native"
+version = "0.0.0"
+edition = "2021"
+description = "Optional native BFS engine for visiter (Path A: Python callbacks via PyO3)."
+
+[lib]
+name = "visiter_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.23"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

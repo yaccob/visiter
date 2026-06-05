@@ -277,7 +277,7 @@ def parse_range(s):
 
 def build(start, rules, default, *, max_depth=64,
             max_nodes=1024, time_limit=None,
-            on_limit="stop", tags=None, key_type=None):
+            on_limit="stop", tags=None, key_type=None, engine="auto"):
     """Build a graph by applying rules repeatedly from each starting value.
 
     At each value x, every Rule whose condition(x) is True contributes an
@@ -395,6 +395,30 @@ def build(start, rules, default, *, max_depth=64,
     if default is not None and not isinstance(default, Op):
         raise TypeError(f"default must be Op or None; "
                         f"got {type(default).__name__}")
+
+    # Optional native acceleration (Path A / ①). `engine`:
+    #   "auto"   — use the native engine when it is installed AND the build is
+    #              within its supported (unbounded) subset; else pure Python.
+    #   "native" — require it; raise if unavailable or unsupported.
+    #   "python" — always pure Python.
+    # The native path produces a byte-identical Graph for the subset; pure
+    # Python remains the always-available baseline.
+    if engine not in ("auto", "native", "python"):
+        raise ValueError(
+            f"engine must be 'auto', 'native', or 'python'; got {engine!r}")
+    if engine != "python":
+        from . import _accel
+        if _accel.supports(rules, max_depth=max_depth,
+                           max_nodes=max_nodes, time_limit=time_limit):
+            return _accel.native_build(start, rules, default,
+                                       tags=tags, key_type=key_type)
+        if engine == "native":
+            raise RuntimeError(
+                "engine='native' requested but unavailable: either the "
+                "visiter_native extension is not installed, or the build uses "
+                "features outside the native subset (max_depth/max_nodes/"
+                "time_limit/bound must all be unset). Build it with "
+                "'make native', or use engine='auto'/'python'.")
 
     op_order = []
     op_labels = {}

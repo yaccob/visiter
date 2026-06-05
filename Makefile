@@ -2,12 +2,13 @@ VENV := .venv
 VENV_BIN := $(VENV)/bin
 VENV_STAMP := $(VENV)/.installed
 
-.PHONY: setup test demo docs build publish test-publish check-version clean help
+.PHONY: setup test demo docs build publish test-publish check-version clean help native
 
 help:
 	@echo "Targets:"
 	@echo "  setup         create venv and install package + dev deps"
 	@echo "  test          run pytest"
+	@echo "  native        build the optional native engine into the venv"
 	@echo "  demo          run all demos/**/*.vit (writes to each out/)"
 	@echo "  docs          regenerate all embedded SVGs in docs/"
 	@echo "  build         build sdist + wheel into dist/"
@@ -27,6 +28,16 @@ $(VENV_STAMP): pyproject.toml
 
 test: setup
 	$(VENV_BIN)/pytest
+
+# Optional native acceleration (Path A / ①). Requires a Rust toolchain.
+# Builds the visiter_native extension into the venv; once present, build()
+# uses it automatically for unbounded graphs (engine="auto"). visiter works
+# without this — pure Python is the always-available fallback.
+native: setup
+	@command -v cargo >/dev/null || { echo "native engine requires a Rust toolchain (cargo) on PATH"; exit 1; }
+	$(VENV_BIN)/pip install -q "maturin>=1.0,<2.0"
+	cd "$(CURDIR)/native" && VIRTUAL_ENV="$(CURDIR)/$(VENV)" "$(CURDIR)/$(VENV_BIN)/maturin" develop --release
+	@echo "native engine installed — build() now uses it for unbounded graphs"
 
 demo: setup
 	@command -v dot >/dev/null || { echo "demos require 'dot' (Graphviz) on PATH"; exit 1; }

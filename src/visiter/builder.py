@@ -158,8 +158,14 @@ def viter(iterable, *, match=Match.ALL, **options):
     """Entry point for the fluent viter pipeline.
 
     Returns a Builder. Kwargs other than `match` (max_depth, max_nodes,
-    on_limit, time_limit, tags, key_type) are forwarded to the internal
-    build() call when the chain is materialized.
+    on_limit, time_limit, tags, key_type, engine) are forwarded to the
+    internal build() call when the chain is materialized.
+
+    `engine` selects the BFS backend: "auto" (default) uses the optional
+    native engine when it is installed and the build is unbounded
+    (max_depth/max_nodes/time_limit unset, no bound), else pure Python;
+    "native" requires it; "python" forces pure Python. The native path
+    produces a byte-identical Graph — pure Python is always available.
     """
     opts = dict(options)
     opts["match"] = match

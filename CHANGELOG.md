@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Optional native BFS engine (`engine=` on `viter`/`build`).** An optional
+  Rust extension (`visiter_native`, built from `native/` via `make native`)
+  accelerates the build for **unbounded** graphs (`max_depth=None`,
+  `max_nodes=None`, no `bound`). Selection:
+  - `engine="auto"` (default) — use the native engine when it is installed and
+    the build is within its supported subset; otherwise pure Python.
+  - `engine="native"` — require it; raise if unavailable or unsupported.
+  - `engine="python"` — always pure Python.
+  The native path keeps callbacks in Python (called per node via PyO3) and
+  produces a Graph byte-identical to the pure-Python build. **Pure Python
+  remains the always-available baseline** — visiter works unchanged without the
+  extension or a Rust toolchain.
+
+---
+
 ## [0.14.0] — 2026-06-04
 
 ### Breaking
