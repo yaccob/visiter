@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [0.15.0] — 2026-06-05
 
 ### Added
 - **Optional native BFS engine (`engine=` on `viter`/`build`).** An optional
