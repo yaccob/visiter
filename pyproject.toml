@@ -32,6 +32,9 @@ validate = [
 analytics = [
     "networkx>=3.0",
 ]
+storage = [
+    "pyarrow>=14",
+]
 dev = [
     "pytest>=7",
     "build>=1.0",
