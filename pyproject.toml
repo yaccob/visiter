@@ -9,7 +9,7 @@ description = "Build and visualize orbit graphs for discrete iterations under gu
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Jakob Stemberger", email = "jakob.stemberger@gmail.com"}]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 keywords = ["graph", "iteration", "visualization", "graphviz", "bfs", "orbit-graph", "dynamical-systems"]
 classifiers = [
     "Development Status :: 3 - Alpha",

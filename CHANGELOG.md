@@ -42,6 +42,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   Rust source); `time_limit` and `OpResult` are not supported and raise rather
   than diverge. See `demos/rust/`.
 
+### Changed
+- **Minimum Python is now 3.11** (was 3.9). The lambda-label derivation in
+  `.case()` relies on `code.co_positions()`, which only exists on 3.11+; on
+  3.9/3.10 it could not disambiguate same-line lambdas, so those versions were
+  never actually supported. CI now runs 3.11/3.12/3.13.
+
 ---
 
 ## [0.14.0] — 2026-06-04

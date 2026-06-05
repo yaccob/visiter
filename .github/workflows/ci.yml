@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -47,15 +47,14 @@ jobs:
       - name: Run demos
         run: PATH="$(pwd)/.venv/bin:$PATH" make demo
 
-  # Optional native engine (PyO3) + columnar storage (pyarrow). pyarrow no
-  # longer ships 3.9 wheels, so this job covers the versions it supports.
+  # Optional native engine (PyO3) + columnar storage (pyarrow).
   native-storage:
     name: native + storage (py ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
