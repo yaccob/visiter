@@ -20,6 +20,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   produces a Graph byte-identical to the pure-Python build. **Pure Python
   remains the always-available baseline** — visiter works unchanged without the
   extension or a Rust toolchain.
+- **Columnar storage (`Graph.to_vitgraph` / `Graph.from_vitgraph`).** Stores a
+  graph as a single `.vitgraph` file — two columnar tables (nodes, edges) plus
+  metadata in a zip container, with edge endpoints interned to int32 node ids
+  and categorical columns (`op`, `label`, `key_type`) dictionary-encoded, all
+  Arrow IPC + zstd. ~10–26× smaller than JSON with much faster load and
+  columnar analytics. `Graph.to_arrow()` exposes the `(nodes, edges,
+  pseudo_edges)` pyarrow Tables for analytics. Requires the optional
+  `[storage]` extra (pyarrow); JSON stays the default human-readable format.
+  Round-trip fidelity matches JSON (node keys are `str(value)`).
 
 ---
 

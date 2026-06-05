@@ -91,3 +91,29 @@ class Graph(dict):
                 json.dump(self, f, **kwargs)
                 f.write("\n")
         return self
+
+    def to_arrow(self):
+        """Return ``(nodes, edges, pseudo_edges)`` as pyarrow Tables.
+
+        The columnar view for analytics: edges reference nodes by int32 id,
+        categorical columns are dictionary-encoded. Requires the ``[storage]``
+        extra (pyarrow).
+        """
+        from .storage import to_arrow
+        return to_arrow(self)
+
+    def to_vitgraph(self, path, *, compression="zstd"):
+        """Write this graph to a single columnar ``.vitgraph`` file.
+
+        Arrow IPC + zstd in a zip container — ~10-26x smaller than JSON with
+        much faster load. Requires the ``[storage]`` extra (pyarrow). Returns
+        self for chaining (usable inside ``.tap()``).
+        """
+        from .storage import to_vitgraph
+        return to_vitgraph(self, path, compression=compression)
+
+    @classmethod
+    def from_vitgraph(cls, path):
+        """Read a ``.vitgraph`` file back into a Graph."""
+        from .storage import from_vitgraph
+        return from_vitgraph(path)

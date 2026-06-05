@@ -1,6 +1,9 @@
 VENV := .venv
 VENV_BIN := $(VENV)/bin
 VENV_STAMP := $(VENV)/.installed
+# Pin the interpreter so the venv is reproducible regardless of what `python3`
+# resolves to on the host. Override with `make setup PYTHON=python3.13`.
+PYTHON ?= python3.12
 
 .PHONY: setup test demo docs build publish test-publish check-version clean help native
 
@@ -21,9 +24,9 @@ help:
 setup: $(VENV_STAMP)
 
 $(VENV_STAMP): pyproject.toml
-	python3 -m venv $(VENV)
-	$(VENV_BIN)/pip install -U pip
-	$(VENV_BIN)/pip install -e ".[dev]"
+	$(PYTHON) -m venv $(VENV)
+	$(VENV_BIN)/python -m pip install -U pip
+	$(VENV_BIN)/python -m pip install -e ".[dev,storage]"
 	@touch $@
 
 test: setup
