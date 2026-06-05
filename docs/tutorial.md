@@ -473,6 +473,51 @@ pip install visiter[validate]
 
 ---
 
+## What if the graph is huge, or the callbacks are slow?
+
+Everything so far is pure Python — it needs no toolchain and is the default.
+For large state spaces there are two **optional** native accelerators (both
+produce the same graph, byte-for-byte) and a compact storage format.
+
+The two accelerators target two different costs:
+
+- **Slow *bookkeeping*, cheap callbacks** → the native engine. Build the
+  optional extension once with `make native` (needs a Rust toolchain), then
+  it kicks in automatically for unbounded builds:
+
+  ```python
+  viter([(0, 0)], max_depth=None, max_nodes=None)  # engine="auto" by default
+  ```
+
+  If the extension isn't installed, you get pure Python — nothing breaks.
+
+- **Slow *callbacks*** (the case where moving only the bookkeeping barely
+  helps) → write the callbacks in Rust, inline, with `lang="rust"`. The
+  current value is bound to `s`, and the expression compiles on the fly:
+
+  ```python
+  (viter(10, lang="rust")
+   .case("s >= 1", "s - 1", label="take 1")
+   .case("s >= 2", "s - 2", label="take 2")
+   .render())
+  ```
+
+  This needs `rustc` on `PATH`; there's no Python fallback for Rust source.
+  See [`demos/rust/`](../demos/rust/) for runnable examples.
+
+And when a graph is too big to keep as JSON, store it columnar — typically
+10–25× smaller, much faster to load (`pip install "visiter[storage]"`):
+
+```python
+graph.to_vitgraph("g.vitgraph")
+graph = Graph.from_vitgraph("g.vitgraph")
+```
+
+The [manual](manual.md#8-optional-native-acceleration-and-columnar-storage)
+covers all three in detail.
+
+---
+
 ## Where do I go from here?
 
 - The [manual](manual.md) is the reference — every parameter, every

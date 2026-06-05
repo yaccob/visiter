@@ -19,7 +19,7 @@ patterns. For the absolute minimum, see [README.md](../README.md).
 
 ## 1. The Builder API
 
-### `viter(iterable, *, max_depth=64, max_nodes=1024, on_limit="stop", time_limit=None, match=Match.ALL, tags=None, key_type=None)`
+### `viter(iterable, *, max_depth=64, max_nodes=1024, on_limit="stop", time_limit=None, match=Match.ALL, tags=None, key_type=None, engine="auto", lang="python", consts=None)`
 
 Starts a fluent `Builder` chain. `iterable` seeds the BFS (can be a
 single value — an `int`, a `str`, a `tuple`, etc. — or any iterable of
@@ -52,6 +52,18 @@ internal graph-construction step when the chain is materialized.
   back to `json_type`). Useful for domain types that serialize as
   strings but should be treated numerically (`Fraction`, `Decimal`,
   `sympy.Rational`).
+- `engine` — BFS backend selection (optional native acceleration; see
+  section 8). `"auto"` (default) uses the native engine when the
+  `visiter_native` extension is installed *and* the build is unbounded
+  (`max_depth`/`max_nodes`/`time_limit` unset, no `bound`), else pure
+  Python. `"native"` requires it (raises otherwise); `"python"` forces
+  pure Python. The native path produces a byte-identical graph.
+- `lang` — callback language (see section 8). `"python"` (default) takes
+  Python callables in `.case()`/`.default()`. `"rust"` switches to inline
+  Rust expression *strings* (value bound to `s`), compiled on the fly with
+  `rustc` and run natively.
+- `consts` — only with `lang="rust"`: a `dict[str, int]` of `i64`
+  constants the Rust expressions may reference (e.g. `consts={"N": 10}`).
 
 ### Builder methods
 
@@ -973,3 +985,118 @@ The bridge is deliberately thin: two Python functions plus one
 their names are already their documentation, and wrapping would only
 duplicate surface area we can't maintain. Everything NetworkX can do
 is one `nx.<something>(graph)` call away.
+
+---
+
+## 8. Optional native acceleration and columnar storage
+
+These features are **optional and additive**. Pure Python with JSON is the
+always-available baseline; nothing below changes default behavior or output —
+the native paths produce graphs byte-identical to the pure-Python build.
+
+### Two performance paths
+
+VisIter spends its build time in two places: bookkeeping (BFS expansion,
+deduplication, node identity) and the user's callbacks. There are two
+independent native paths, for two different workloads:
+
+- **Path A — native engine, Python callbacks (`engine=`).** Moves only the
+  *bookkeeping* to native code; the callbacks stay Python. Best when callbacks
+  are cheap and the graph is large.
+- **Path B — inline Rust callbacks (`lang="rust"`).** Compiles the *callbacks*
+  themselves to native code. Best when callbacks are expensive (the case where
+  Path A barely helps, because the Python callback dominates).
+
+### Path A — `engine=` (the `visiter_native` extension)
+
+Build the optional extension once (needs a Rust toolchain):
+
+```bash
+make native        # builds visiter_native into the venv via maturin
+```
+
+Once installed, `engine="auto"` (the default) routes **unbounded** builds
+(`max_depth=None`, `max_nodes=None`, no `bound`) through the native engine and
+everything else through pure Python. The native engine calls your Python
+callables per node (via PyO3) but replaces the `str(value)` keying and dict
+bookkeeping with native hashing and a compact layout.
+
+```python
+# Native when the extension is present and the build is unbounded; else Python.
+viter([(0, 0)], max_depth=None, max_nodes=None, engine="auto")  # default
+viter(10, max_depth=None, engine="native")   # require native; raise if absent
+viter(10, engine="python")                    # always pure Python
+```
+
+`engine="native"` raises `RuntimeError` when the extension is missing **or** the
+build uses features outside the unbounded subset. `engine="auto"` silently falls
+back. The native path keeps `tags`, `key_type`, `OpResult`, `Match.FIRST`, and
+`default` working and yields the same graph dict.
+
+### Path B — `lang="rust"` (inline Rust-expression callbacks)
+
+With `lang="rust"`, `.case()` / `.default()` take **Rust expression strings**
+instead of Python lambdas. The current value is bound to `s`; the expression is
+the edge label/id when no `label=`/`id=` is given. The expressions are
+co-located at the call site, compiled once with `rustc` (cached on a hash of the
+generated source), and run natively.
+
+```python
+#!/usr/bin/env viter
+# Nim, with native callbacks. `s` is the current value.
+(viter(10, lang="rust")
+ .case("s >= 1", "s - 1", label="take 1")
+ .case("s >= 2", "s - 2", label="take 2")
+ .case("s >= 3", "s - 3", label="take 3")
+ .render())
+```
+
+Constants are injected with `consts=` (i64), and tuple state uses `s.0`, `s.1`:
+
+```python
+(viter([(0, 0)], lang="rust", consts={"A": 3, "B": 5})
+ .case("s.0 < A", "(A, s.1)", label="fill A")
+ .case("s.1 < B", "(s.0, B)", label="fill B")
+ .case("s.0 > 0 && s.1 < B",
+       "(std::cmp::max(0, s.0 - (B - s.1)), std::cmp::min(B, s.0 + s.1))",
+       label="A->B")
+ .render())
+```
+
+Requirements and v1 scope:
+
+- **`rustc` must be on `PATH`** (install via <https://rustup.rs>). There is no
+  Python fallback for Rust source — use `lang="python"` in toolchain-less
+  environments. The first build per unique source pays a compile cost; later
+  builds hit the cache.
+- **State values:** `int` or `tuple`-of-`int` (arity ≥ 2), inferred from the
+  start values. Node keys match Python's `str()` exactly.
+- **Unbounded only:** `max_depth` / `max_nodes` / `time_limit` / `bound` are
+  rejected. `Match.ALL` / `Match.FIRST` and `default` are supported; `tags` and
+  `OpResult` are not yet.
+- Runnable examples: [`demos/rust/`](../demos/rust/).
+
+### Columnar storage — `.vitgraph` (the `[storage]` extra)
+
+JSON (`Graph.write()`) stays the default, human-readable format. For large
+graphs, a columnar format is far smaller and faster:
+
+```bash
+pip install "visiter[storage]"     # pulls pyarrow
+```
+
+```python
+graph.to_vitgraph("g.vitgraph")          # write (Arrow IPC + zstd in a zip)
+graph = Graph.from_vitgraph("g.vitgraph")  # read back
+nodes, edges, pseudo = graph.to_arrow()  # pyarrow Tables for analytics
+```
+
+A `.vitgraph` stores the graph as two columnar tables (nodes, edges) plus
+metadata in a single zip container: edge endpoints are interned to int32 node
+ids (instead of repeated string keys), and the categorical columns (`op`,
+`label`, `key_type`) are dictionary-encoded. The result is **~10–25× smaller
+than JSON** for graphs of a few hundred nodes and up (with much faster load and
+columnar analytics); below ~50 nodes the columnar overhead makes JSON smaller,
+which is fine — small graphs use JSON anyway. Round-trip fidelity matches JSON:
+node keys are `str(value)`, so JSON-native `roots` (ints, strings) round-trip
+exactly while tuple `roots` come back as lists.

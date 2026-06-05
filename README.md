@@ -33,6 +33,11 @@ pip install visiter
 Graphviz must be available on `PATH` (`brew install graphviz` /
 `apt install graphviz`).
 
+Optional extras: `pip install "visiter[storage]"` adds the columnar
+`.vitgraph` format, `[validate]` the JSON-Schema validator, `[analytics]`
+the NetworkX bridge. The optional native engine is built separately with
+`make native` (needs a Rust toolchain). See *Performance & storage* below.
+
 ## Going further
 
 `.render()` is convenient for the common case. For anything more —
@@ -107,6 +112,33 @@ def odd_step(x):
  .render())
 ```
 
+## Performance & storage (optional)
+
+Pure Python with JSON is the default and needs no toolchain. For large
+state spaces, three optional, additive features kick in — all producing
+the same graph, byte-for-byte:
+
+- **Native engine** (`engine="auto"`, the default once built). `make native`
+  builds an optional Rust extension that runs the BFS bookkeeping natively
+  for unbounded builds while keeping your Python callbacks. Falls back to
+  pure Python when absent.
+- **Inline Rust callbacks** (`lang="rust"`) — for when the *callbacks* are
+  the bottleneck. `.case()` takes Rust expression strings (value bound to
+  `s`), compiled on the fly with `rustc` and run natively:
+
+  ```python
+  (viter(10, lang="rust")
+   .case("s >= 1", "s - 1", label="take 1")
+   .case("s >= 2", "s - 2", label="take 2")
+   .render())
+  ```
+
+- **Columnar storage** (`pip install "visiter[storage]"`) — `.vitgraph`
+  files (`graph.to_vitgraph(...)` / `Graph.from_vitgraph(...)`) are ~10–25×
+  smaller than JSON and far faster to load for large graphs.
+
+Details in the [manual](docs/manual.md#8-optional-native-acceleration-and-columnar-storage).
+
 ## Why VisIter?
 
 **Free, scriptable, Graphviz-native orbit-graph rendering for discrete
@@ -128,7 +160,7 @@ Maude, LoLA, and continuous-dynamics tooling:
 - [docs/comparison.md](docs/comparison.md) — how VisIter relates to
   other tools in the ecosystem, and when to pick something else.
 - [demos/](demos/) — runnable `.vit` examples organized by topic
-  (`basics/`, `rendering/`, `integration/`, `applications/`).
+  (`basics/`, `rendering/`, `integration/`, `applications/`, `rust/`).
 
 ## License
 
