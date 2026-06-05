@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [0.16.0] — 2026-06-05
 
 ### Added
 - **Native engine ships as a wheel — `pip install "visiter[native]"`.** The
