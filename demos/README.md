@@ -53,21 +53,23 @@ The tree is `demos/<language>/<topic>/`. `python/` holds the full set;
 
 Inline `lang="rust"` callbacks (Rust expression strings), compiled on
 the fly with `rustc`. Require `rustc` on `PATH`; the `Fraction`-valued
-`golden_ratio.vit` also needs `cargo`.
+`golden_ratio.vit` also needs `cargo`. Each is the counterpart of the
+`python/` demo with the same name and renders a byte-for-byte identical
+SVG (enforced by `tests/test_demos.py`).
 
 ### basics/
 
 | demo                  | what it shows                                                        |
 | --------------------- | -------------------------------------------------------------------- |
-| `nim.vit`             | Same graph as `python/basics/nim.vit`, with inline Rust callbacks    |
+| `nim.vit`             | Counterpart of `python/basics/nim.vit` (inline Rust callbacks + tag) |
 | `golden_ratio.vit`    | Exact rationals via `num-rational`'s `BigRational` (needs `cargo`)   |
-| `strings.vit`         | `str` state values in `lang="rust"` (Path B)                        |
+| `string_iteration.vit`| `str` states (Path B): drop trailing vowels until a consonant       |
 
 ### applications/
 
 | demo                  | what it shows                                                        |
 | --------------------- | -------------------------------------------------------------------- |
-| `water_jugs.vit`      | Water-jug reachability with inline Rust callbacks and `consts=`      |
+| `water_jugs.vit`      | Water-jug reachability, inline Rust callbacks, `consts=` + highlight tag |
 
 ## Running all demos
 

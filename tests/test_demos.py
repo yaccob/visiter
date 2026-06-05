@@ -79,3 +79,37 @@ def test_vit_demo_runs(vit, tmp_path):
         assert "<svg" in result.stdout, (
             f"{vit.relative_to(DEMOS)}: expected SVG output on stdout"
         )
+
+
+# Rust demos whose whole point is to be the lang="rust" counterpart of a Python
+# demo: the SVG on stdout must be byte-for-byte identical to the Python demo's.
+RUST_PARITY = [
+    "basics/nim.vit",
+    "basics/golden_ratio.vit",
+    "basics/string_iteration.vit",
+    "applications/water_jugs.vit",
+]
+
+
+def _strip_host_noise(svg):
+    # Drop the one build-host-dependent line (graphviz version comment).
+    return "\n".join(ln for ln in svg.splitlines()
+                     if "graphviz version" not in ln)
+
+
+@pytest.mark.skipif(not (_have("rustc") and _have("cargo")),
+                    reason="rustc/cargo not on PATH (required by lang='rust')")
+@pytest.mark.parametrize("rel", RUST_PARITY)
+def test_rust_demo_matches_python_svg(rel):
+    """Each rust/ demo renders the same SVG as its python/ counterpart."""
+    env = {**os.environ, "PATH": AUGMENTED_PATH}
+
+    def _svg(path):
+        r = subprocess.run(["viter", str(path)], env=env,
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"{path} failed:\n{r.stderr}"
+        return _strip_host_noise(r.stdout)
+
+    py = _svg(DEMOS / "python" / rel)
+    rs = _svg(DEMOS / "rust" / rel)
+    assert py == rs, f"rust/{rel} SVG diverges from python/{rel}"

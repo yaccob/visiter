@@ -297,12 +297,22 @@ def build_dot(graph,
     else:
         sorted_nodes = sorted(graph["nodes"].items(), key=lambda kv: kv[0])
 
+    # Order a node's outgoing-op wedges by rule-declaration order (op_order),
+    # not by the op id string. The id is the callback's source form — a Python
+    # lambda body in the pure-Python path, the inline expression in lang="rust"
+    # — so sorting by it makes the wedge order (and thus the rendered fills)
+    # depend on the callback *spelling*, diverging between the two engines for
+    # an otherwise-identical graph. Declaration order is engine-independent and
+    # already drives op colors, so wedges and colors now agree.
+    op_rank = {op: i for i, op in enumerate(graph.get("op_order", []))}
+
     for vstr, info in sorted_nodes:
         if check_deadline(deadline, on_limit, dot, "in build_dot node loop") is dot:
             return dot
         node_id = _node_id(vstr)
         hl = "highlight" in info.get("tags", [])
-        ops = sorted(out_ops.get(vstr, set()))
+        ops = sorted(out_ops.get(vstr, set()),
+                     key=lambda o: (op_rank.get(o, len(op_rank)), o))
         fill_colors = [resolved.get(op, fallback)[0] for op in ops]
         display = None
         if node_label is not None:
