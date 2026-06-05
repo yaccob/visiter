@@ -28,10 +28,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # No macos-13 (x86_64): GitHub's Intel-macOS runners are chronically
+        # queue-starved and stall releases. Intel-Mac users build from the
+        # sdist (which needs a Rust toolchain).
         platform:
           - { runner: ubuntu-latest,  target: x86_64 }
           - { runner: ubuntu-latest,  target: aarch64 }
-          - { runner: macos-13,       target: x86_64 }
           - { runner: macos-latest,   target: aarch64 }
           - { runner: windows-latest, target: x64 }
     steps:
