@@ -5,14 +5,14 @@ VENV_STAMP := $(VENV)/.installed
 # resolves to on the host. Override with `make setup PYTHON=python3.13`.
 PYTHON ?= python3.12
 
-.PHONY: setup test demo docs build publish test-publish check-version clean help native
+.PHONY: setup test demo dot-check docs build publish test-publish check-version clean help native
 
 help:
 	@echo "Targets:"
 	@echo "  setup         create venv and install package + dev deps"
 	@echo "  test          run pytest"
 	@echo "  native        build the optional native engine into the venv"
-	@echo "  demo          run all demos/**/*.vit (writes to each out/)"
+	@echo "  demo          re-render demos whose .vit changed (force all: make -B demo)"
 	@echo "  docs          regenerate all embedded SVGs in docs/"
 	@echo "  build         build sdist + wheel into dist/"
 	@echo "  check-version verify pyproject version isn't already on PyPI"
@@ -42,9 +42,55 @@ native: setup
 	cd "$(CURDIR)/native" && VIRTUAL_ENV="$(CURDIR)/$(VENV)" "$(CURDIR)/$(VENV_BIN)/maturin" develop --release
 	@echo "native engine installed — build() now uses it for all graphs"
 
-demo: setup
+# Each demo renders into its sibling out/ dir; make re-renders an output only
+# when its .vit is newer. Force a full rebuild the make way: `make -B demo`.
+# foreach just collects the target list; the work is plain pattern rules (one
+# per topic dir for the 1-.vit -> 1-.svg-on-stdout demos, grouped pattern rules
+# for the few that write several SVGs themselves). Assumes the venv exists (run
+# `make setup` once); it is deliberately not a prerequisite so `make -B demo`
+# re-renders outputs without rebuilding the venv.
+VITER := $(VENV_BIN)/viter
+DEMO_VITS := $(shell find demos -name '*.vit' | sort)
+# .vit that don't map to one same-named .svg on stdout (text, or self-written
+# multi-file output) — handled by the explicit rules below.
+SPECIAL := demos/python/integration/inspection.vit \
+           demos/python/rendering/ghost_stubs.vit \
+           demos/python/rendering/color_stability.vit
+DEMO_SVGS := $(foreach v,$(filter-out $(SPECIAL),$(DEMO_VITS)),$(dir $v)out/$(notdir $(v:.vit=.svg)))
+
+demo: dot-check $(DEMO_SVGS) \
+      demos/python/integration/out/inspection.txt \
+      demos/python/rendering/out/ghost_stubs_bound.svg \
+      demos/python/rendering/out/ghost_stubs_max_depth.svg \
+      demos/python/rendering/out/color_stability_baseline.svg \
+      demos/python/rendering/out/color_stability_appended.svg \
+      demos/python/rendering/out/color_stability_pinned.svg
+
+dot-check:
 	@command -v dot >/dev/null || { echo "demos require 'dot' (Graphviz) on PATH"; exit 1; }
-	$(VENV_BIN)/python scripts/generate_demo_outputs.py
+
+# 1 .vit -> 1 same-named .svg on stdout — one pattern rule per topic dir
+demos/python/basics/out/%.svg:       demos/python/basics/%.vit       ; $(VITER) $< $(VITER_ARGS) > $@
+demos/python/integration/out/%.svg:  demos/python/integration/%.vit  ; $(VITER) $< $(VITER_ARGS) > $@
+demos/python/applications/out/%.svg: demos/python/applications/%.vit ; $(VITER) $< $(VITER_ARGS) > $@
+demos/python/rendering/out/%.svg:    demos/python/rendering/%.vit    ; $(VITER) $< $(VITER_ARGS) > $@
+demos/rust/basics/out/%.svg:         demos/rust/basics/%.vit         ; $(VITER) $< $(VITER_ARGS) > $@
+demos/rust/applications/out/%.svg:   demos/rust/applications/%.vit   ; $(VITER) $< $(VITER_ARGS) > $@
+
+# tic-tac-toe is the one demo that takes extra CLI args (after the .vit, so the
+# script sees them on sys.argv)
+demos/python/applications/out/tictactoe.svg: VITER_ARGS := --depth 3
+
+# inspection prints a text report, not an SVG
+demos/python/integration/out/inspection.txt: demos/python/integration/inspection.vit
+	$(VITER) $< > $@
+
+# self-writing demos: one viter run makes the whole set. A pattern rule with
+# several target patterns is grouped — the recipe runs once for all of them.
+demos/python/rendering/out/%_bound.svg demos/python/rendering/out/%_max_depth.svg: demos/python/rendering/%.vit
+	$(VITER) $<
+demos/python/rendering/out/%_baseline.svg demos/python/rendering/out/%_appended.svg demos/python/rendering/out/%_pinned.svg: demos/python/rendering/%.vit
+	$(VITER) $<
 
 docs: setup
 	@command -v dot >/dev/null || { echo "docs require 'dot' (Graphviz) on PATH"; exit 1; }

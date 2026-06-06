@@ -45,7 +45,7 @@ jobs:
         run: .venv/bin/pytest
 
       - name: Run demos
-        run: PATH="$(pwd)/.venv/bin:$PATH" make demo
+        run: PATH="$(pwd)/.venv/bin:$PATH" make -B demo
 
   # Optional native engine (PyO3) + columnar storage (pyarrow).
   native-storage:
