@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-06-06
+
 ### Changed
 - **The native engine (Path A) now accelerates bounded builds too.** Previously
   `engine="auto"` only used `visiter_native` for unbounded builds and silently
@@ -20,6 +22,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   limits; `time_limit` is best-effort (the wall-clock cut point is
   non-deterministic, as it already is in pure Python). `engine="native"` now
   raises only when the extension is missing, not for bounded builds.
+
+### Fixed
+- **Parallel edges to the same target survive.** Edge deduplication keyed only
+  on `(from, to)`, so when two *distinct* ops mapped the same source onto the
+  same successor, only the first edge was recorded and the second was silently
+  dropped — order-dependent, contrary to `build()`'s documented "every matching
+  rule contributes an outgoing edge", and inconsistent with pseudo-edges (which
+  key on `(from, op)`). The key is now `(from, to, op)` across both engines, so
+  a self-reference loop now coexists with a genuine same-target edge (e.g. a
+  fixpoint loop and an `n·2^k` self-loop on the same node both render). Edges
+  sharing one op id still collapse — the op, not the condition, is an edge's
+  identity.
 
 ## [0.16.0] — 2026-06-05
 
