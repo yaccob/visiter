@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-06-06
+
+### Fixed
+- **`lang="rust"` (Path B) now keeps parallel edges to the same target.** The
+  0.17.0 edge-dedup fix landed in the pure-Python, native (`visiter_native`) and
+  assembler paths but was missed in the on-the-fly Rust codegen (`rustgen.py`),
+  which still keyed `seen_edges` on `(from, to)`. It now keys on `(from, to, op)`
+  (with a `(from, to, op.id)` re-dedup on the Python side), so distinct ops to
+  the same successor survive — matching the other engines. Adds a
+  python-vs-`lang="rust"` parity test for this case (the coverage gap that let
+  it slip).
+
+### Changed
+- **`lang="rust"` integer state values are now `i128` (was `i64`).** Collatz-like
+  reverse maps exceed 2⁶³ at modest depth, where `i64` silently wrapped and
+  diverged from Python; `i128` lifts the ceiling to ~±1.7·10³⁸ while keeping the
+  fast bare-`rustc` path and bitwise ops. Compilation now enables
+  `overflow-checks`, so a build that exceeds `i128` **fails loudly** (a Rust
+  panic surfaced as an error) instead of producing a wrong graph. `consts=`
+  share the integer width (`i128`). Truly unbounded integers still require
+  `Fraction` (BigInt-backed) or the `engine=` paths (Python bignums).
+
 ## [0.17.0] — 2026-06-06
 
 ### Changed
