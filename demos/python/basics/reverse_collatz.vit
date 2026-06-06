@@ -10,4 +10,6 @@
  .case(lambda m: True, lambda m: 2 * m, label="×2")
  .case(lambda m: (m - 1) % 3 == 0 and (m - 1) // 3 > 1 and ((m - 1) // 3) % 2 == 1,
        lambda m: (m - 1) // 3, label="(m-1)/3")
+ .build()
+ .to_dot(show_factors=True, show_binary=True)
  .render())
