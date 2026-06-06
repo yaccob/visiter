@@ -100,6 +100,32 @@ def test_multiple_cases_fan_out():
     assert ("6", "2") in out_from_6
 
 
+def test_parallel_edges_same_target_distinct_ops():
+    # Two distinct ops that map the same x onto the same y are TWO edges:
+    # the edge dedup keys on (from, to, op), not (from, to). This is what
+    # lets a self-reference loop coexist with a genuine same-target edge.
+    g = (viter([6])
+         .case(lambda x: x == 6, lambda x: 3, label="div2", id="div2")
+         .case(lambda x: x == 6, lambda x: 3, label="sub3", id="sub3")
+         .build())
+    out = {(e["from"], e["to"], e["op"]) for e in g["edges"] if e["from"] == "6"}
+    assert ("6", "3", "div2") in out
+    assert ("6", "3", "sub3") in out
+
+
+def test_parallel_edges_same_op_collapse():
+    # Same op (same id) firing for the same x→y under two different
+    # conditions stays ONE edge — the op, not the condition, is the edge's
+    # identity, so visually-identical edges still merge.
+    f = lambda x: 3
+    g = (viter([6])
+         .case(lambda x: x == 6, f, label="to3", id="same")
+         .case(lambda x: x < 10, f, label="to3", id="same")
+         .build())
+    out = [e for e in g["edges"] if e["from"] == "6" and e["to"] == "3"]
+    assert len(out) == 1
+
+
 def test_tags_recorded_when_predicate_matches():
     g = (viter([1, 2, 3], tags={"even": lambda x: x % 2 == 0})
          .case(lambda x: x % 3 == 0, lambda x: x // 3, label="÷3")

@@ -58,6 +58,20 @@ def test_parity_default_branch():
 
 
 @native_only
+def test_parity_parallel_edges_same_target():
+    # Two distinct ops landing on the same successor must survive on both
+    # engines (edge dedup keys on (from, to, op)).
+    def make(engine):
+        return (viter([6], max_depth=None, max_nodes=None, engine=engine)
+                .case(lambda x: x == 6, lambda x: 3, label="div2", id="div2")
+                .case(lambda x: x == 6, lambda x: 3, label="sub3", id="sub3")
+                .build())
+    py, nat = _both(make)
+    assert py == nat
+    assert len([e for e in py["edges"] if e["from"] == "6"]) == 2
+
+
+@native_only
 def test_parity_opresult_per_call_label():
     def op(n):
         return OpResult(n - 1, label=f"->{n - 1}")

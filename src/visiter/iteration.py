@@ -482,7 +482,11 @@ def build(start, rules, default, *, max_depth=64,
         return info
 
     def add_edge(a, b, op_id, label):
-        key = (str(a), str(b))
+        # Dedup on (from, to, op): two *distinct* ops landing on the same
+        # successor are genuinely two edges (different color/label), so they
+        # both survive — mirroring add_pseudo's (from, op) key. Only an exact
+        # (from, to, op) repeat (e.g. two rules sharing one id) collapses.
+        key = (str(a), str(b), op_id)
         if key not in seen_edges:
             graph["edges"].append({"from": str(a), "to": str(b),
                                    "op": op_id, "label": label})

@@ -89,7 +89,7 @@ fn build_raw(
     let mut values: Vec<Py<PyAny>> = Vec::new();
     let mut depths: Vec<u32> = Vec::new();
     let mut edges: Vec<Edge> = Vec::new();
-    let mut seen_edges: HashSet<(u32, u32)> = HashSet::new();
+    let mut seen_edges: HashSet<(u32, u32, usize)> = HashSet::new();
     let mut pseudo: Vec<Pseudo> = Vec::new();
     let mut seen_pseudo: HashSet<(u32, usize)> = HashSet::new();
     let mut depth_limited = false;
@@ -142,7 +142,10 @@ fn build_raw(
                 }
             };
             if let Some(nid) = nid {
-                if seen_edges.insert(($xid, nid)) {
+                // Key on (from, to, op): distinct ops to the same successor are
+                // distinct edges. Python re-dedups on the resolved op.id so two
+                // rule indices sharing one id still collapse like pure Python.
+                if seen_edges.insert(($xid, nid, $op_idx)) {
                     edges.push(($xid, nid, $op_idx, label));
                 }
             }

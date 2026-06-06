@@ -118,15 +118,24 @@ def native_build(starts, rules, default, *, tags, key_type,
             info["tags"] = node_tags
         nodes[str(value)] = info
 
+    # Real edges dedup on (str(from), str(to), op.id) — the native side dedups
+    # on (from_idx, to_idx, op_idx); re-dedup here so distinct rule indices
+    # sharing one op.id collapse exactly like pure Python (which keys on op.id).
     edges = []
+    seen_edges = set()
     for from_idx, to_idx, op_idx, label in raw_edges:
         op = op_for(op_idx)
-        edges.append({
-            "from": str(values[from_idx]),
-            "to": str(values[to_idx]),
-            "op": op.id,
-            "label": label if label is not None else op.label,
-        })
+        from_str = str(values[from_idx])
+        to_str = str(values[to_idx])
+        key = (from_str, to_str, op.id)
+        if key not in seen_edges:
+            edges.append({
+                "from": from_str,
+                "to": to_str,
+                "op": op.id,
+                "label": label if label is not None else op.label,
+            })
+            seen_edges.add(key)
 
     # Pseudo-edges carry the static op label and dedup on (str(from), op.id) —
     # the native side dedups on (from_idx, op_idx); re-dedup here so distinct
