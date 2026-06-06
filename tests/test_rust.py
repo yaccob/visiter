@@ -59,6 +59,41 @@ def test_parity_grid_tuples_with_consts():
 
 
 @rustc
+def test_parity_parallel_edges_same_target():
+    # Two distinct ops landing on the same successor are two edges, in the
+    # rust codegen path too — dedup keys on (from, to, op), not (from, to).
+    _assert_parity(
+        lambda: (viter([6], max_depth=None, max_nodes=None, engine="python")
+                 .case(lambda x: x == 6, lambda x: 3, label="div2", id="div2")
+                 .case(lambda x: x == 6, lambda x: 3, label="sub3", id="sub3")),
+        lambda: (viter([6], max_depth=None, max_nodes=None, lang="rust", bind="s")
+                 .case("s == 6", "3", label="div2", id="div2")
+                 .case("s == 6", "3", label="sub3", id="sub3")))
+
+
+@rustc
+def test_parity_i128_beyond_i64():
+    # Doubling past 2^63 overflows i64 (silent wrap) but fits i128; the rust
+    # path must match Python's exact integers up to the i128 ceiling.
+    _assert_parity(
+        lambda: (viter([1], max_depth=70, max_nodes=None, engine="python")
+                 .case(lambda s: s >= 0, lambda s: s * 2, label="x2", id="x2")),
+        lambda: (viter([1], max_depth=70, max_nodes=None, lang="rust", bind="s")
+                 .case("s >= 0", "s * 2", label="x2", id="x2")))
+
+
+@rustc
+def test_rust_int_overflow_raises_not_silent():
+    # Past the i128 ceiling the rust path must fail loudly (overflow-checks),
+    # not silently wrap into a wrong graph.
+    import subprocess
+    chain = (viter([1], max_depth=130, max_nodes=None, lang="rust", bind="s")
+             .case("s >= 0", "s * 2", label="x2", id="x2"))
+    with pytest.raises(subprocess.CalledProcessError):
+        chain.build()
+
+
+@rustc
 def test_parity_match_first_exclusive():
     _assert_parity(
         lambda: (viter(10, max_depth=None, max_nodes=None, engine="python",
@@ -83,6 +118,35 @@ def test_parity_default_branch():
                  .case("s % 2 == 0 && s > 0", "s / 2", label="half", id="half")
                  .default("if s > 0 { s - 1 } else { s }", label="dec",
                           id="dec")))
+
+
+@rustc
+def test_parity_parallel_edges_same_target_distinct_ops():
+    # Two distinct ops mapping the same x onto the same y are TWO edges: the
+    # edge dedup keys on (from, to, op), not (from, to). Mirrors the pure-Python
+    # test of the same name — this is what lets a self-reference loop coexist
+    # with a genuine same-target edge (reverse_collatz show_even at node 1).
+    _assert_parity(
+        lambda: (viter([6], max_depth=None, max_nodes=None, engine="python")
+                 .case(lambda x: x == 6, lambda x: 3, label="div2", id="div2")
+                 .case(lambda x: x == 6, lambda x: 3, label="sub3", id="sub3")),
+        lambda: (viter([6], max_depth=None, max_nodes=None, lang="rust", bind="s")
+                 .case("s == 6", "3", label="div2", id="div2")
+                 .case("s == 6", "3", label="sub3", id="sub3")))
+
+
+@rustc
+def test_parity_parallel_edges_same_op_collapse():
+    # Same op (same id) firing for the same x→y under two conditions stays ONE
+    # edge — the op, not the condition, is the edge's identity. Mirrors the
+    # pure-Python test of the same name.
+    _assert_parity(
+        lambda: (viter([6], max_depth=None, max_nodes=None, engine="python")
+                 .case(lambda x: x == 6, lambda x: 3, label="to3", id="same")
+                 .case(lambda x: x < 10, lambda x: 3, label="to3", id="same")),
+        lambda: (viter([6], max_depth=None, max_nodes=None, lang="rust", bind="s")
+                 .case("s == 6", "3", label="to3", id="same")
+                 .case("s < 10", "3", label="to3", id="same")))
 
 
 # --- bounds and pseudo-edges (the behavioral-parity cases) -------------------

@@ -18,9 +18,15 @@ ints (arity >= 2), ``str``, and ``Fraction`` (exact rationals via
 ``num-rational``/``num-bigint``, compiled through ``cargo``). ``max_depth`` /
 ``max_nodes`` / ``time_limit`` bounds, ``bound=`` predicates, ``tags=`` and
 per-call edge labels (``label_rs=``, the ``OpResult`` analogue) all match the
-Python path. Heterogeneous value types are the only gap — rustc rejects the
-type mix, which surfaces as a clear compile error rather than a silent
-divergence.
+Python path. Heterogeneous value types are one gap — rustc rejects the type
+mix, which surfaces as a clear compile error rather than a silent divergence.
+
+Integer state values are ``i128`` (range ~±1.7e38), not Python's unbounded
+``int``: this covers Collatz-like reverse maps that exceed 2^63 at modest depth.
+Compilation enables overflow-checks, so a build that exceeds i128 **panics**
+(surfaced as an error) instead of silently wrapping into a wrong graph. For
+unbounded integers use ``Fraction`` here, or the ``engine=`` paths (Python
+bignums).
 """
 import hashlib
 import os
@@ -85,6 +91,7 @@ num-rational = "0.4"
 
 [profile.release]
 opt-level = 3
+overflow-checks = true
 """
 
 _RATIONAL_PRELUDE = (
@@ -122,19 +129,25 @@ def _value_type(sample):
                     f"({v.numerator}i64), BigInt::from({v.denominator}i64))",
                     json_type="string")
     if isinstance(sample, int):
-        return dict(base, vtype="i64", ptype="i64", copy=True,
+        # i128 (not i64): the BFS values of Collatz-like reverse maps blow past
+        # 2^63 well before 2^127, so i64 silently wraps where Python stays exact.
+        # i128 lifts the ceiling to ~1.7e38 and keeps the bare-rustc speed and
+        # bitwise ops; beyond it, overflow-checks (see _compile) panic instead
+        # of wrapping. True unbounded precision would need BigInt (and lose
+        # bitwise ops), which Fraction already uses for the rational case.
+        return dict(base, vtype="i128", ptype="i128", copy=True, int_width="i128",
                     keyfmt='format!("{}", s)',
-                    render_start=lambda v: f"{v}i64", json_type="integer")
+                    render_start=lambda v: f"{v}i128", json_type="integer")
     if (isinstance(sample, tuple) and len(sample) >= 2
             and all(isinstance(x, int) and not isinstance(x, bool)
                     for x in sample)):
         k = len(sample)
-        vtype = "(" + ", ".join(["i64"] * k) + ")"
+        vtype = "(" + ", ".join(["i128"] * k) + ")"
         placeholders = ", ".join("{}" for _ in range(k))
         accessors = ", ".join(f"s.{i}" for i in range(k))
-        return dict(base, vtype=vtype, ptype=vtype, copy=True,
+        return dict(base, vtype=vtype, ptype=vtype, copy=True, int_width="i128",
                     keyfmt=f'format!("({placeholders})", {accessors})',
-                    render_start=lambda v: "(" + ", ".join(f"{x}i64" for x in v)
+                    render_start=lambda v: "(" + ", ".join(f"{x}i128" for x in v)
                     + ")", json_type="array")
     if isinstance(sample, str):
         return dict(base, vtype="String", ptype="&str", copy=False,
@@ -178,7 +191,7 @@ fn main() {{
     let mut tagbits: Vec<u32> = Vec::new();
     let mut edges: Vec<(u32, u32, usize)> = Vec::new();
     let mut edge_labels: Vec<Option<String>> = Vec::new();
-    let mut seen_edges: HashSet<(u32, u32)> = HashSet::new();
+    let mut seen_edges: HashSet<(u32, u32, usize)> = HashSet::new();
     let mut pseudo: Vec<(u32, usize)> = Vec::new();
     let mut seen_pseudo: HashSet<(u32, usize)> = HashSet::new();
     let mut depth_limited = false;
@@ -266,7 +279,11 @@ def _render_source(starts, cases, default, consts, tag_items, vt, bind):
     start_ins = "s0" if copy else "s0.clone()"
     emit_ref = "values[i]" if copy else "&values[i]"
 
-    const_lines = "\n".join(f"const {k}: i64 = {v};" for k, v in consts.items())
+    # Consts share the state's integer width so `s.0 < N - 1` etc. typecheck
+    # (i128 for int/tuple states; i64 otherwise, unchanged).
+    const_int = vt.get("int_width", "i64")
+    const_lines = "\n".join(f"const {k}: {const_int} = {v};"
+                            for k, v in consts.items())
 
     # Every user callback takes the fixed internal param and rebinds it to the
     # chain's bind= name, so the expressions read from `bind` while the bind
@@ -326,7 +343,11 @@ def _render_source(starts, cases, default, consts, tag_items, vt, bind):
             f"let tb = tags_of({vref}); "
             "depths.push(cur_depth + 1); tagbits.push(tb); "
             f"{v_ins} values.push(v); next.push(i); i }} }}; "
-            f"if seen_edges.insert((xid, nid)) {{ edges.push((xid, nid, {op_idx})); "
+            # Key on (from, to, op): distinct ops to the same successor are
+            # distinct edges. build_rust re-dedups on the resolved op.id so two
+            # rule indices sharing one id still collapse like pure Python.
+            f"if seen_edges.insert((xid, nid, {op_idx})) {{ "
+            f"edges.push((xid, nid, {op_idx})); "
             f"edge_labels.push({edge_label}); }} }}")
 
     def add_pseudo(op_idx):
@@ -370,7 +391,10 @@ def _compile_error(src, stderr):
 
 def _compile(source, needs_cargo=False):
     _CACHE.mkdir(parents=True, exist_ok=True)
-    h = hashlib.sha256(source.encode()).hexdigest()[:16]
+    # Fold the compile flags into the cache key: flags (e.g. overflow-checks)
+    # are not part of the source text, so a flag change would otherwise reuse a
+    # stale binary built without them.
+    h = hashlib.sha256((source + "\n//flags:ovf=on").encode()).hexdigest()[:16]
 
     if needs_cargo:
         # Rational values: compile via cargo (num-bigint/num-rational deps),
@@ -404,6 +428,7 @@ def _compile(source, needs_cargo=False):
         src.write_text(source)
         proc = subprocess.run(
             ["rustc", "--edition", "2021", "-C", "opt-level=3",
+             "-C", "overflow-checks=on",
              "-C", "codegen-units=1", "-o", str(binary), str(src)],
             capture_output=True, text=True)
         if proc.returncode != 0:
@@ -488,14 +513,22 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
             info["tags"] = node_tags
         nodes[k] = info
 
+    # Real edges dedup on (from, to, op.id) — the rust side dedups on
+    # (from_idx, to_idx, op_idx); re-dedup here so distinct rule indices sharing
+    # one op.id collapse exactly like pure Python (which keys on op.id).
     n_edges = int(r.line())
     edges = []
+    seen_edges = set()
     for _ in range(n_edges):
         a, b, o, llen = (int(x) for x in r.line().split())
         # llen >= 0: a per-call (OpResult-style) label follows; else static.
         lab = r.blob(llen) if llen >= 0 else op_labels[op_ids[o]]
-        edges.append({"from": keys[a], "to": keys[b], "op": op_ids[o],
-                      "label": lab})
+        oid = op_ids[o]
+        key = (keys[a], keys[b], oid)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edges.append({"from": keys[a], "to": keys[b], "op": oid,
+                          "label": lab})
 
     n_pseudo = int(r.line())
     seen_pseudo = set()

@@ -64,8 +64,9 @@ internal graph-construction step when the chain is materialized.
   Python callables in `.case()`/`.default()`. `"rust"` switches to inline
   Rust expression *strings* (value bound to the `bind=` name), compiled on
   the fly with `rustc` and run natively.
-- `consts` — only with `lang="rust"`: a `dict[str, int]` of `i64`
+- `consts` — only with `lang="rust"`: a `dict[str, int]` of `i128`
   constants the Rust expressions may reference (e.g. `consts={"N": 10}`).
+  (They share the integer state width — `i128` for int/tuple states.)
 - `bind` — **required** with `lang="rust"`: the identifier the expressions
   read the current value from (e.g. `bind="n"`). Must be a valid Rust
   identifier (not a keyword); there is no default, and it does not affect
@@ -1070,8 +1071,8 @@ with a fixed, unique parameter and re-exposes it under your `bind=` name via a
 a name that matches an internal helper (it only shadows it inside its own
 expression).
 
-Constants are injected with `consts=` (i64), and tuple state uses `<bind>.0`,
-`<bind>.1`:
+Constants are injected with `consts=` (i128, matching the integer state width),
+and tuple state uses `<bind>.0`, `<bind>.1`:
 
 ```python
 (viter([(0, 0)], lang="rust", bind="j", consts={"A": 3, "B": 5})
@@ -1096,6 +1097,13 @@ yields the same graph as the Python path, byte-for-byte. Requirements and scope:
   `str()` exactly. Rationals bind the value as `&BigRational` with an `r(n)`
   helper, so e.g. golden ratio with `bind="x"` is
   `.case("true", "r(1) + x.recip()")`.
+- **Integer width:** `int`/`tuple` state values are `i128` (range ~±1.7·10³⁸),
+  not Python's unbounded `int`. This covers e.g. Collatz-like reverse maps that
+  blow past 2⁶³ at modest depth. Beyond i128, overflow-checks make the build
+  **fail loudly** (a Rust panic surfaced as an error) rather than silently
+  wrapping into a wrong graph. For genuinely unbounded integers use `Fraction`
+  (BigInt-backed) on the Python path, or `engine="auto"`/`"native"` (which keeps
+  Python's bignums).
 - **Full behavioral parity:** `max_depth`, `max_nodes` and `time_limit` apply
   with the same defaults as the Python path (64 / 1024) and produce the same
   ghost-stub pseudo-edges / truncation; `bound=` predicates, `tags=`
