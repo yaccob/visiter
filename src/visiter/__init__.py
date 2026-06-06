@@ -42,7 +42,7 @@ Fluent pipeline::
 from .builder import Builder, Match, OnLimit, viter
 from .dot import Dot
 from .filters import NxFilter
-from .graph import Graph
+from .graph import Graph, GraphHandle
 from .io import write
 from .iteration import OpResult, parse_range
 from .to_dot import to_dot
@@ -69,6 +69,7 @@ __all__ = [
     "OpResult",
     "to_dot",
     "Graph",
+    "GraphHandle",
     "Dot",
     # Filters
     "NxFilter",

@@ -350,3 +350,130 @@ def test_label_rs_rejected_in_python_path():
 def test_rust_rejects_unsupported_value_type():
     with pytest.raises(ValueError, match="int, tuple"):
         (viter([1.5], lang="rust", bind="s").case("true", "s").build())
+
+
+# --- Phase 1a: GraphHandle (lazy materialization + content-addressed reuse) --
+
+@rustc
+def test_rust_build_returns_lazy_handle():
+    from visiter import GraphHandle
+    h = (viter([1], max_depth=8, max_nodes=None, lang="rust", bind="s")
+         .case("s >= 0", "s * 2", label="x2", id="x2")).build()
+    assert isinstance(h, GraphHandle)
+    assert h.is_materialized is False
+    # First dict-ish access materializes exactly once.
+    _ = h["nodes"]
+    assert h.is_materialized is True
+    # materialize() is idempotent and returns self.
+    assert h.materialize() is h
+
+
+@rustc
+def test_rust_handle_parity_through_eq_both_directions():
+    # The lazy handle compares equal to the eager pure-Python Graph, with the
+    # handle on either side of ==.
+    py = (viter([1], max_depth=8, max_nodes=None, engine="python")
+          .case(lambda s: s >= 0, lambda s: s * 2, label="x2", id="x2")).build()
+    h = (viter([1], max_depth=8, max_nodes=None, lang="rust", bind="s")
+         .case("s >= 0", "s * 2", label="x2", id="x2")).build()
+    assert h == py
+    assert py == h
+
+
+@rustc
+def test_rust_handle_content_addressed_reuse():
+    from visiter.rustgen import _GRAPH_CACHE
+
+    def mk():
+        return (viter([1], max_depth=10, max_nodes=None, lang="rust", bind="s")
+                .case("s >= 0", "s * 2", label="x2", id="x2")).build()
+
+    h1 = mk()
+    key1 = h1.graph_key
+    assert isinstance(key1, str) and key1
+    dump = _GRAPH_CACHE / f"{key1}.graphdump"
+    h1.materialize()
+    assert dump.exists()
+    mtime = dump.stat().st_mtime_ns
+    # Identical inputs → same content address; the dump is reused, the native
+    # binary is not re-run, so the file is not rewritten.
+    h2 = mk()
+    assert h2.graph_key == key1
+    assert dump.stat().st_mtime_ns == mtime
+    assert h1 == h2
+
+
+# --- Phase 1b: native .vitgraph writer (no Python materialization) -----------
+
+@rustc
+def test_rust_native_vitgraph_matches_python(tmp_path):
+    pytest.importorskip("pyarrow")
+    from visiter import Graph, _accel
+    if not _accel.native_available():
+        pytest.skip("native engine (visiter_native) not installed")
+
+    def mk():
+        return (viter([1], max_depth=8, max_nodes=None, lang="rust", bind="s")
+                .case("s >= 0", "s * 2", label="x2", id="x2")
+                .case("s % 3 == 0", "s + 1", label="p1", id="p1")).build()
+
+    # Native writer: straight from the dump; the handle must stay unmaterialized.
+    h = mk()
+    native_path = tmp_path / "native.vitgraph"
+    h.to_vitgraph(str(native_path))
+    assert h.is_materialized is False
+    g_native = Graph.from_vitgraph(str(native_path))
+
+    # Python reference: materialize, then write via the pure-Python storage
+    # path (a plain Graph copy carries no native writer).
+    ref = Graph(dict(mk().materialize()))
+    py_path = tmp_path / "py.vitgraph"
+    ref.to_vitgraph(str(py_path))
+    g_py = Graph.from_vitgraph(str(py_path))
+
+    assert g_native == g_py
+
+
+# --- Phase 2: native view query (subset render without full materialization) -
+
+@rustc
+def test_rust_native_view_dot_parity():
+    pytest.importorskip("pyarrow")
+    from visiter import _accel
+    if not _accel.native_available():
+        pytest.skip("native engine (visiter_native) not installed")
+
+    def mk():
+        return (viter([1], max_depth=10, max_nodes=None, lang="rust", bind="s")
+                .case("s >= 1", "s * 2", label="x2", id="x2")
+                .case("(s - 1) % 3 == 0 && (s - 1) / 3 > 1 "
+                      "&& ((s - 1) / 3) % 2 == 1",
+                      "(s - 1) / 3", label="d3", id="d3")).build()
+
+    anchor, radius = "8", 2
+    for direction in ("both", "forward", "backward"):
+        # Reference: full materialization + Python crop.
+        ref = mk().materialize().to_dot(anchor=anchor, radius=radius,
+                                        direction=direction)
+        # Native fast path: the handle must stay unmaterialized and yield the
+        # byte-identical DOT (including ghost stubs at the boundary).
+        h = mk()
+        got = h.to_dot(anchor=anchor, radius=radius, direction=direction)
+        assert h.is_materialized is False
+        assert got.source == ref.source
+
+
+@rustc
+def test_rust_view_returns_neighborhood_subgraph():
+    pytest.importorskip("pyarrow")
+    from visiter import _accel
+    if not _accel.native_available():
+        pytest.skip("native engine (visiter_native) not installed")
+    h = (viter([1], max_depth=10, max_nodes=None, lang="rust", bind="s")
+         .case("s >= 1", "s * 2", label="x2", id="x2")).build()
+    view = h.view("4", 1, "both")
+    # Neighborhood of 4 within 1 hop (undirected): {2, 4, 8} kept; 1 and 16 are
+    # boundary (direct neighbors), so present as nodes but reachable only at the
+    # cut. The kept set is what a radius-1 crop renders.
+    assert h.is_materialized is False
+    assert "4" in view["nodes"] and "8" in view["nodes"] and "2" in view["nodes"]

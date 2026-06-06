@@ -34,11 +34,90 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import warnings
 from fractions import Fraction
 from pathlib import Path
 
 _CACHE = Path(tempfile.gettempdir()) / "visiter-rustgen-cache"
+
+# Persisted, content-addressed build outputs (BFS dumps + columnar .vitgraph
+# stores), so an identical re-build reuses them without re-running the binary,
+# and the parse into a Python Graph is deferred to first access (GraphHandle).
+# Cross-session by default (survives process exit); override with
+# VISITER_CACHE_DIR. The compiled-binary cache stays under tempdir (_CACHE).
+_GRAPH_CACHE = (Path(os.environ["VISITER_CACHE_DIR"])
+                if os.environ.get("VISITER_CACHE_DIR")
+                else Path.home() / ".cache" / "visiter" / "graphs")
+
+# Bump ONLY when the produced graph/store bytes can change for the same input,
+# to invalidate stale cache entries (the 0.17→0.18 dedup-fix class of bug).
+_SEMANTICS_EPOCH = "1"
+
+# Files created in this process must never be GC'd (a lazy GraphHandle may still
+# need its dump); only prior-session entries are eligible for eviction.
+_PROCESS_START = time.time()
+_RUSTC_VERSION = None
+
+
+def _rustc_version():
+    global _RUSTC_VERSION
+    if _RUSTC_VERSION is None:
+        try:
+            out = subprocess.run(["rustc", "--version"], capture_output=True,
+                                 text=True)
+            _RUSTC_VERSION = out.stdout.strip() or "rustc?"
+        except Exception:
+            _RUSTC_VERSION = "rustc?"
+    return _RUSTC_VERSION
+
+
+def _native_tag():
+    """Version of the native converter (affects .vitgraph bytes)."""
+    try:
+        import visiter_native
+        return str(getattr(visiter_native, "__version__", "0"))
+    except ImportError:
+        return "none"
+
+
+def _impl_tag():
+    """Auto-invalidation token folding toolchain + semantics epoch, so a changed
+    implementation cannot silently reuse a stale cache entry."""
+    return hashlib.sha256(
+        (_rustc_version() + "|" + _SEMANTICS_EPOCH).encode()).hexdigest()[:12]
+
+
+def _cache_disabled():
+    return os.environ.get("VISITER_NO_CACHE", "") not in ("", "0", "false")
+
+
+def _gc_graph_cache():
+    """Bound the on-disk cache: evict least-recently-modified entries from
+    *prior* sessions until under budget. Current-session files are protected so
+    a still-lazy handle never loses its dump. Best-effort; ignores races."""
+    try:
+        max_bytes = int(os.environ.get("VISITER_CACHE_MAX_BYTES",
+                                       str(2 * 1024 ** 3)))
+    except ValueError:
+        max_bytes = 2 * 1024 ** 3
+    try:
+        files = [(p, p.stat()) for p in _GRAPH_CACHE.glob("*") if p.is_file()]
+    except OSError:
+        return
+    total = sum(st.st_size for _, st in files)
+    if total <= max_bytes:
+        return
+    for p, st in sorted(files, key=lambda x: x[1].st_mtime):
+        if st.st_mtime >= _PROCESS_START:
+            continue  # protect this session's (possibly still-lazy) entries
+        try:
+            p.unlink()
+            total -= st.st_size
+        except OSError:
+            pass
+        if total <= max_bytes:
+            break
 
 # The fixed, unique parameter every generated callback takes. The chain's bind=
 # name is re-exposed from it via a `let`, so the bind name never has to dodge
@@ -463,7 +542,7 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
     is the (required) identifier the expressions read the current value from.
     Mirrors ``visiter.iteration.build`` semantics for the supported subset.
     """
-    from .graph import Graph
+    from .graph import Graph, GraphHandle
     consts = consts or {}
     tags = tags or {}
     _check_bind(bind)
@@ -494,81 +573,196 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
     else:
         h, m, s = (int(x) for x in time_limit.split(":"))
         tl = float(h * 3600 + m * 60 + s)
-    with tempfile.NamedTemporaryFile(suffix=".graph") as tf:
-        subprocess.run([str(binary), tf.name, str(md), str(mn), repr(tl)],
+
+    # Content-address the native output on (generated source + run bounds). The
+    # source already encodes starts/cases/consts/tags/bind, and the binary is a
+    # pure function of the source, so identical inputs reuse the dump without
+    # re-running. A time_limit makes the cut wall-clock dependent (hence not
+    # deterministic): such builds get a fresh, non-reused dump each time.
+    _GRAPH_CACHE.mkdir(parents=True, exist_ok=True)
+    # A time_limit makes the cut wall-clock dependent (non-deterministic), and
+    # VISITER_NO_CACHE forces a fresh build (escape hatch for impure builds);
+    # both get a unique, non-reused dump. The impl tag folds the toolchain +
+    # semantics epoch into the address so a changed implementation can never
+    # reuse a stale entry.
+    cacheable = tl < 0 and not _cache_disabled()
+    graph_key = hashlib.sha256(
+        (source + f"\n//run:{md} {mn} {tl}\n//impl:{_impl_tag()}").encode()
+    ).hexdigest()[:32]
+    if cacheable:
+        dump_path = _GRAPH_CACHE / f"{graph_key}.graphdump"
+        if not dump_path.exists():
+            # Write to a per-process partial, then atomically rename, so a
+            # concurrent identical build never observes a half-written dump.
+            partial = _GRAPH_CACHE / f"{graph_key}.{os.getpid()}.partial"
+            subprocess.run(
+                [str(binary), str(partial), str(md), str(mn), repr(tl)],
+                check=True, capture_output=True, text=True)
+            os.replace(partial, dump_path)
+    else:
+        fd, tmp = tempfile.mkstemp(suffix=".graphdump", dir=str(_GRAPH_CACHE))
+        os.close(fd)
+        dump_path = Path(tmp)
+        subprocess.run([str(binary), str(dump_path), str(md), str(mn), repr(tl)],
                        check=True, capture_output=True, text=True)
-        r = _Reader(Path(tf.name).read_bytes())
+    _gc_graph_cache()
 
     kt = key_type if key_type is not None else vt["json_type"]
-    n_nodes = int(r.line())
-    keys, nodes = [], {}
-    for _ in range(n_nodes):
-        depth, tb, klen = (int(x) for x in r.line().split())
-        k = r.blob(klen)
-        keys.append(k)
-        info = {"depth": depth, "key_type": kt}
-        node_tags = [tag_items[j][0] for j in range(len(tag_items))
-                     if tb & (1 << j)]
-        if node_tags:
-            info["tags"] = node_tags
-        nodes[k] = info
 
-    # Real edges dedup on (from, to, op.id) — the rust side dedups on
-    # (from_idx, to_idx, op_idx); re-dedup here so distinct rule indices sharing
-    # one op.id collapse exactly like pure Python (which keys on op.id).
-    n_edges = int(r.line())
-    edges = []
-    seen_edges = set()
-    for _ in range(n_edges):
-        a, b, o, llen = (int(x) for x in r.line().split())
-        # llen >= 0: a per-call (OpResult-style) label follows; else static.
-        lab = r.blob(llen) if llen >= 0 else op_labels[op_ids[o]]
-        oid = op_ids[o]
-        key = (keys[a], keys[b], oid)
-        if key not in seen_edges:
-            seen_edges.add(key)
-            edges.append({"from": keys[a], "to": keys[b], "op": oid,
-                          "label": lab})
-
-    n_pseudo = int(r.line())
-    seen_pseudo = set()
-    pseudo_edges = []
-    for _ in range(n_pseudo):
-        x, o = (int(v) for v in r.line().split())
-        oid = op_ids[o]
-        if (keys[x], oid) not in seen_pseudo:   # dedup on (from, op id)
-            seen_pseudo.add((keys[x], oid))
-            pseudo_edges.append({"from": keys[x], "op": oid,
-                                 "label": op_labels[oid]})
-
-    depth_limited, trunc_reason = (int(x) for x in r.line().split())
-    if trunc_reason:
-        tkey = r.blob(int(r.line()))
-        reason = (f"max_nodes={max_nodes}" if trunc_reason == 1
-                  else f"time_limit={time_limit}")
-        if on_limit == "raise":
-            raise RuntimeError(f"{reason} reached at value={tkey}")
-        warnings.warn(
-            f"build: {reason} reached at value={tkey}; output is truncated. "
-            f"Pass a higher limit or None to disable.", UserWarning, stacklevel=2)
-    if depth_limited and on_limit != "raise":
-        warnings.warn(
-            f"build: max_depth={max_depth} reached; output is truncated. "
-            f"Pass a higher max_depth or None to disable.", UserWarning,
-            stacklevel=2)
-
+    # Op order: declaration order, deduped on the resolved op id. Shared by the
+    # Python parse and the native .vitgraph writer so both agree.
     op_order = []
-    seen = set()
+    _seen_op = set()
     for oid in op_ids:
-        if oid not in seen:
-            seen.add(oid)
+        if oid not in _seen_op:
+            _seen_op.add(oid)
             op_order.append(oid)
-    return Graph({
-        "schema_version": "1",
-        "roots": list(starts),
-        "nodes": nodes,
-        "edges": edges,
-        "pseudo_edges": pseudo_edges,
-        "op_order": op_order,
-        "op_labels": {oid: op_labels[oid] for oid in op_order},
-    })
+
+    def _materialize():
+        """Parse the persisted native dump into a Graph dict (deferred)."""
+        r = _Reader(Path(dump_path).read_bytes())
+        n_nodes = int(r.line())
+        keys, nodes = [], {}
+        for _ in range(n_nodes):
+            depth, tb, klen = (int(x) for x in r.line().split())
+            k = r.blob(klen)
+            keys.append(k)
+            info = {"depth": depth, "key_type": kt}
+            node_tags = [tag_items[j][0] for j in range(len(tag_items))
+                         if tb & (1 << j)]
+            if node_tags:
+                info["tags"] = node_tags
+            nodes[k] = info
+
+        # Real edges dedup on (from, to, op.id) — the rust side dedups on
+        # (from_idx, to_idx, op_idx); re-dedup here so distinct rule indices
+        # sharing one op.id collapse exactly like pure Python (keys on op.id).
+        n_edges = int(r.line())
+        edges = []
+        seen_edges = set()
+        for _ in range(n_edges):
+            a, b, o, llen = (int(x) for x in r.line().split())
+            # llen >= 0: a per-call (OpResult-style) label follows; else static.
+            lab = r.blob(llen) if llen >= 0 else op_labels[op_ids[o]]
+            oid = op_ids[o]
+            key = (keys[a], keys[b], oid)
+            if key not in seen_edges:
+                seen_edges.add(key)
+                edges.append({"from": keys[a], "to": keys[b], "op": oid,
+                              "label": lab})
+
+        n_pseudo = int(r.line())
+        seen_pseudo = set()
+        pseudo_edges = []
+        for _ in range(n_pseudo):
+            x, o = (int(v) for v in r.line().split())
+            oid = op_ids[o]
+            if (keys[x], oid) not in seen_pseudo:   # dedup on (from, op id)
+                seen_pseudo.add((keys[x], oid))
+                pseudo_edges.append({"from": keys[x], "op": oid,
+                                     "label": op_labels[oid]})
+
+        depth_limited, trunc_reason = (int(x) for x in r.line().split())
+        if trunc_reason:
+            tkey = r.blob(int(r.line()))
+            reason = (f"max_nodes={max_nodes}" if trunc_reason == 1
+                      else f"time_limit={time_limit}")
+            if on_limit == "raise":
+                raise RuntimeError(f"{reason} reached at value={tkey}")
+            warnings.warn(
+                f"build: {reason} reached at value={tkey}; output is truncated. "
+                f"Pass a higher limit or None to disable.", UserWarning,
+                stacklevel=2)
+        if depth_limited and on_limit != "raise":
+            warnings.warn(
+                f"build: max_depth={max_depth} reached; output is truncated. "
+                f"Pass a higher max_depth or None to disable.", UserWarning,
+                stacklevel=2)
+
+        return Graph({
+            "schema_version": "1",
+            "roots": list(starts),
+            "nodes": nodes,
+            "edges": edges,
+            "pseudo_edges": pseudo_edges,
+            "op_order": op_order,
+            "op_labels": {oid: op_labels[oid] for oid in op_order},
+        })
+
+    def _write_vitgraph(out_path):
+        """Write the columnar .vitgraph natively from the dump, skipping the
+        Python materialization. Returns True if written natively, False to tell
+        the caller to fall back to the Python storage path."""
+        from . import _accel
+        if not _accel.native_available():
+            return False
+        import json as _json
+        import visiter_native
+        # An older visiter_native (< 0.3.0) lacks this entry point; fall back to
+        # the Python storage path rather than raising on the missing attribute.
+        if not hasattr(visiter_native, "dump_to_vitgraph"):
+            return False
+        op_default_labels = [op_labels[oid] for oid in op_ids]
+        tag_names = [name for name, _ in tag_items]
+        visiter_native.dump_to_vitgraph(
+            str(dump_path), str(out_path), kt,
+            tag_names,
+            [str(o) for o in op_ids],
+            [str(op_default_labels[i]) for i in range(len(op_ids))],
+            _json.dumps(list(starts), default=str),
+            [str(o) for o in op_order],
+            _json.dumps({str(oid): op_labels[oid] for oid in op_order},
+                        default=str),
+            "1")
+        return True
+
+    def _view(anchor, radius, direction="both"):
+        """Extract the radius-hop neighborhood natively (no full-graph Python
+        materialization). Returns a GraphHandle over the subset, or None to
+        signal the caller should fall back to the Python crop."""
+        from . import _accel
+        if not _accel.native_available():
+            return None
+        import visiter_native
+        if not hasattr(visiter_native, "view_vitgraph"):
+            return None
+        try:
+            import pyarrow  # noqa: F401  (subset is read back via from_vitgraph)
+        except ImportError:
+            return None
+        # Ensure the full columnar store exists (content-addressed, derived
+        # from the dump once and reused across views).
+        ntag = _native_tag()
+        full_vit = _GRAPH_CACHE / f"{graph_key}.{ntag}.vitgraph"
+        if not full_vit.exists():
+            partial = _GRAPH_CACHE / f"{graph_key}.{ntag}.{os.getpid()}.vit.partial"
+            if not _write_vitgraph(str(partial)):
+                return None
+            os.replace(partial, full_vit)
+        if isinstance(anchor, (list, tuple, set)):
+            anchors = [str(a) for a in anchor]
+        else:
+            anchors = [str(anchor)]
+        skey = hashlib.sha256(
+            (graph_key + f"|n={ntag}|a=" + repr(sorted(anchors))
+             + f"|r={int(radius)}|d={direction}").encode()).hexdigest()[:32]
+        subset_vit = _GRAPH_CACHE / f"{skey}.vitgraph"
+        if not subset_vit.exists():
+            partial = _GRAPH_CACHE / f"{skey}.{os.getpid()}.vit.partial"
+            visiter_native.view_vitgraph(str(full_vit), str(partial), anchors,
+                                         int(radius), direction)
+            os.replace(partial, subset_vit)
+            _gc_graph_cache()
+
+        def _mat():
+            return Graph.from_vitgraph(str(subset_vit))
+
+        def _vw(out_path):
+            import shutil
+            shutil.copyfile(str(subset_vit), out_path)
+            return True
+
+        return GraphHandle(_mat, graph_key=skey, vitgraph_writer=_vw)
+
+    return GraphHandle(_materialize, graph_key=graph_key,
+                       vitgraph_writer=_write_vitgraph, view_fn=_view)

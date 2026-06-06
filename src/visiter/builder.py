@@ -163,7 +163,12 @@ class Builder:
         if isinstance(build_kwargs.get("on_limit"), OnLimit):
             build_kwargs["on_limit"] = build_kwargs["on_limit"].value
 
-        return _build(self._iterable, rules, default_op, **build_kwargs)
+        # Wrap the eager build (pure Python / native PyO3 engine) in a
+        # pre-materialized GraphHandle so every build path returns the same
+        # handle type (uniform .view()/.to_vitgraph()/.is_materialized API).
+        from .graph import GraphHandle
+        result = _build(self._iterable, rules, default_op, **build_kwargs)
+        return GraphHandle.materialized(result)
 
     def _build_rust(self, default_exclusive):
         """Path B: compile the Rust-string cases and run the native BFS.
