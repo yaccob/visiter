@@ -1,0 +1,13 @@
+#!/usr/bin/env viter
+# The Collatz ("3n+1") map: even n → n/2, odd n → 3n+1.
+# Started from 6 and 9, the two trajectories merge as they fall (both pass
+# through 10) and end in the trivial cycle 1 → 4 → 2 → 1 — the (conjectured)
+# universal sink. 1 is odd, so 3·1+1 = 4 closes the loop back onto the
+# already-visited 4 (BFS dedups, so the edge curls back instead of unrolling
+# forever). 9 is a "hailstone" start: it climbs to 52 before crashing down.
+# Highlighted: the powers of two (…16→8→4→2→1), the free-fall home stretch
+# both trajectories join on the way into the cycle.
+(viter([6, 9], tags={"highlight": lambda n: (n & (n - 1)) == 0})
+ .case(lambda n: n % 2 == 0, lambda n: n // 2,    label="n/2")
+ .case(lambda n: n % 2 == 1, lambda n: 3 * n + 1, label="3n+1")
+ .render())

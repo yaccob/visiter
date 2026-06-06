@@ -21,6 +21,8 @@ The tree is `demos/<language>/<topic>/`. `python/` holds the full set;
 | --------------------- | -------------------------------------------------------------------- |
 | `nim.vit`             | Nim matchstick game — all game states, winning positions highlighted |
 | `atm.vit`             | ATM payout — all ways to dispense 80 EUR with 50/20/10 notes        |
+| `collatz.vit`         | Collatz (3n+1) trajectories from 6 and 9 merging into the 1→4→2→1 cycle; powers of two highlighted |
+| `reverse_collatz.vit` | Collatz run backwards — the predecessor tree of 1, bounded by `max_depth` |
 | `golden_ratio.vit`    | Fraction iteration, `key_type="number"` override                    |
 | `string_iteration.vit`| Arbitrary hashable values as nodes (strings)                         |
 
@@ -62,6 +64,8 @@ SVG (enforced by `tests/test_demos.py`).
 | demo                  | what it shows                                                        |
 | --------------------- | -------------------------------------------------------------------- |
 | `nim.vit`             | Counterpart of `python/basics/nim.vit` (inline Rust callbacks + tag) |
+| `collatz.vit`         | Counterpart of `python/basics/collatz.vit` (inline Rust callbacks + tag) |
+| `reverse_collatz.vit` | Counterpart of `python/basics/reverse_collatz.vit` (`match=ALL` branching) |
 | `golden_ratio.vit`    | Exact rationals via `num-rational`'s `BigRational` (needs `cargo`)   |
 | `string_iteration.vit`| `str` states (Path B): drop trailing vowels until a consonant       |
 

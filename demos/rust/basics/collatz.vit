@@ -1,0 +1,17 @@
+#!/usr/bin/env viter
+# Collatz ("3n+1") map — the lang="rust" counterpart of
+# python/basics/collatz.vit, producing a byte-for-byte identical SVG. The
+# current value is bound to `n` (named via bind=, an i64); each case's inline
+# Rust expression returns the next value and doubles as the edge label when one
+# is given. Started from 6 and 9, both trajectories end in the trivial cycle
+# 1 → 4 → 2 → 1 (1 is odd, so 3·1+1 = 4 curls back onto the already-visited 4);
+# 9 is a "hailstone" start that climbs to 52 first. The highlight tag marks the
+# powers of two (the home stretch …16→8→4→2→1). Requires rustc on PATH.
+#
+# Usage:
+#   viter demos/rust/basics/collatz.vit
+(viter([6, 9], lang="rust", bind="n",
+       tags={"highlight": "(n & (n - 1)) == 0"})
+ .case("n % 2 == 0", "n / 2",     label="n/2")
+ .case("n % 2 == 1", "3 * n + 1", label="3n+1")
+ .render())

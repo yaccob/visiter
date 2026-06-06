@@ -85,6 +85,8 @@ def test_vit_demo_runs(vit, tmp_path):
 # demo: the SVG on stdout must be byte-for-byte identical to the Python demo's.
 RUST_PARITY = [
     "basics/nim.vit",
+    "basics/collatz.vit",
+    "basics/reverse_collatz.vit",
     "basics/golden_ratio.vit",
     "basics/string_iteration.vit",
     "applications/water_jugs.vit",
