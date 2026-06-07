@@ -716,22 +716,26 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
             "1")
         return True
 
-    def _view(anchor, radius, direction="both"):
-        """Extract the radius-hop neighborhood natively (no full-graph Python
-        materialization). Returns a GraphHandle over the subset, or None to
-        signal the caller should fall back to the Python crop."""
+    def _crop(anchor=None, radius=None, direction="both", max_depth=None,
+              value_range=None):
+        """Compute a crop natively (no full-graph Python materialization) for any
+        combination of anchor/radius, max_depth and value_range. Returns
+        ``(subset_handle, keep_keys)`` — the subset is the kept neighborhood plus
+        its boundary, ``keep_keys`` the exact rendered set (for ``to_dot(_keep=)``)
+        — or None to signal the caller should fall back to the Python crop."""
         from . import _accel
         if not _accel.native_available():
             return None
+        import json as _json
         import visiter_native
-        if not hasattr(visiter_native, "view_vitgraph"):
+        if not hasattr(visiter_native, "crop_vitgraph"):
             return None
         try:
             import pyarrow  # noqa: F401  (subset is read back via from_vitgraph)
         except ImportError:
             return None
-        # Ensure the full columnar store exists (content-addressed, derived
-        # from the dump once and reused across views).
+        # Ensure the full columnar store exists (content-addressed, derived from
+        # the dump once and reused across crops).
         ntag = _native_tag()
         full_vit = _GRAPH_CACHE / f"{graph_key}.{ntag}.vitgraph"
         if not full_vit.exists():
@@ -739,19 +743,35 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
             if not _write_vitgraph(str(partial)):
                 return None
             os.replace(partial, full_vit)
-        if isinstance(anchor, (list, tuple, set)):
+
+        if anchor is None:
+            anchors = []
+        elif isinstance(anchor, (list, tuple, set)):
             anchors = [str(a) for a in anchor]
         else:
             anchors = [str(anchor)]
+        rad = int(radius) if radius is not None else -1
+        md = int(max_depth) if max_depth is not None else -1
+        roots = [str(s) for s in starts]
+        if value_range is not None:
+            vlo, vhi = str(value_range[0]), str(value_range[1])
+        else:
+            vlo = vhi = None
+
         skey = hashlib.sha256(
-            (graph_key + f"|n={ntag}|a=" + repr(sorted(anchors))
-             + f"|r={int(radius)}|d={direction}").encode()).hexdigest()[:32]
+            (graph_key + f"|n={ntag}|a={sorted(anchors)!r}|r={rad}|d={direction}"
+             f"|md={md}|vr={vlo},{vhi}").encode()).hexdigest()[:32]
         subset_vit = _GRAPH_CACHE / f"{skey}.vitgraph"
-        if not subset_vit.exists():
+        keep_path = _GRAPH_CACHE / f"{skey}.keep.json"
+        if subset_vit.exists() and keep_path.exists():
+            keep_keys = _json.loads(keep_path.read_text())
+        else:
             partial = _GRAPH_CACHE / f"{skey}.{os.getpid()}.vit.partial"
-            visiter_native.view_vitgraph(str(full_vit), str(partial), anchors,
-                                         int(radius), direction)
+            keep_keys = visiter_native.crop_vitgraph(
+                str(full_vit), str(partial), anchors, rad, direction, md, roots,
+                vlo, vhi)
             os.replace(partial, subset_vit)
+            keep_path.write_text(_json.dumps(keep_keys))
             _gc_graph_cache()
 
         def _mat():
@@ -762,7 +782,7 @@ def build_rust(starts, cases, default, *, bind, consts=None, key_type=None,
             shutil.copyfile(str(subset_vit), out_path)
             return True
 
-        return GraphHandle(_mat, graph_key=skey, vitgraph_writer=_vw)
+        return GraphHandle(_mat, graph_key=skey, vitgraph_writer=_vw), keep_keys
 
     return GraphHandle(_materialize, graph_key=graph_key,
-                       vitgraph_writer=_write_vitgraph, view_fn=_view)
+                       vitgraph_writer=_write_vitgraph, crop_fn=_crop)

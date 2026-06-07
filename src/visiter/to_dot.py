@@ -62,6 +62,7 @@ def to_dot(graph, *,
                  anchor=None, radius=None, direction="both",
                  max_depth=None,
                  value_range=None,
+                 _keep=None,
                  op_colors=None, palette=None,
                  show_binary=False, show_factors=False,
                  node_label=None, node_label_attr=None,
@@ -138,7 +139,14 @@ def to_dot(graph, *,
     """
     deadline = parse_time_limit(time_limit)
 
-    keep = None
+    if _keep is not None:
+        # A precomputed keep set (e.g. from the native crop path) bypasses the
+        # crop computation entirely; the graph passed in is already the
+        # keep-plus-boundary subset, and rendering proceeds from this set.
+        keep = set(_keep)
+        anchor = radius = max_depth = value_range = None
+    else:
+        keep = None
     if anchor is not None or radius is not None:
         if anchor is None or radius is None:
             raise ValueError("anchor and radius must both be given, or neither")

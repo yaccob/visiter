@@ -36,7 +36,7 @@ storage = [
     "pyarrow>=14",
 ]
 native = [
-    "visiter_native>=0.3.0",
+    "visiter_native>=0.4.0",
 ]
 dev = [
     "pytest>=7",

@@ -180,7 +180,7 @@ class GraphHandle(Graph):
     """
 
     @classmethod
-    def materialized(cls, graph, *, vitgraph_writer=None, view_fn=None):
+    def materialized(cls, graph, *, vitgraph_writer=None, crop_fn=None):
         """Wrap an already-built :class:`Graph` as a pre-materialized handle.
 
         The non-deferred build paths (pure Python, the native PyO3 engine) have
@@ -189,14 +189,14 @@ class GraphHandle(Graph):
         while behaving exactly like the populated dict they returned before.
         """
         h = cls(lambda: graph, graph_key=None,
-                vitgraph_writer=vitgraph_writer, view_fn=view_fn)
+                vitgraph_writer=vitgraph_writer, crop_fn=crop_fn)
         dict.update(h, graph)
         h._materialized = True
         h._materializer = None
         return h
 
     def __init__(self, materializer, *, graph_key=None, vitgraph_writer=None,
-                 view_fn=None):
+                 crop_fn=None):
         super().__init__()
         # Plain attributes; a dict subclass keeps a normal __dict__.
         self._materializer = materializer
@@ -205,10 +205,11 @@ class GraphHandle(Graph):
         # Optional native fast path: write the columnar .vitgraph straight from
         # the build output without materializing the full graph in Python.
         self._vitgraph_writer = vitgraph_writer
-        # Optional native fast path: extract a radius-hop neighborhood without
-        # materializing the full graph. Takes (anchor, radius, direction) and
-        # returns a GraphHandle over the subset, or None to signal fallback.
-        self._view_fn = view_fn
+        # Optional native fast path: compute a crop (anchor/radius, max_depth,
+        # value_range, or any combination) without materializing the full graph.
+        # Called as crop_fn(anchor=, radius=, direction=, max_depth=, value_range=)
+        # and returns (subset_handle, keep_keys), or None to signal fallback.
+        self._crop_fn = crop_fn
 
     @property
     def is_materialized(self):
@@ -304,25 +305,36 @@ class GraphHandle(Graph):
         so a subsequent ``to_dot(anchor, radius)`` reproduces the same crop —
         including ghost stubs — as cropping the full graph.
         """
-        if self._view_fn is not None and not self._materialized:
-            v = self._view_fn(anchor, radius, direction)
-            if v is not None:
-                return v
+        if self._crop_fn is not None and not self._materialized:
+            r = self._crop_fn(anchor=anchor, radius=radius, direction=direction)
+            if r is not None:
+                return r[0]
         self._ensure()
         return _subset_graph(self, anchor, radius, direction)
 
     def to_dot(self, **kwargs):
-        # Native subset fast path: when cropping by anchor+radius only, extract
-        # the neighborhood natively so the full graph is never materialized.
+        # Native crop fast path: any crop (anchor/radius, max_depth, value_range,
+        # or a combination) is computed natively — keep set plus boundary — so the
+        # full graph is never materialized; to_dot then renders from the
+        # precomputed keep, reproducing the same DOT (ghost stubs included).
         anchor = kwargs.get("anchor")
         radius = kwargs.get("radius")
-        if (self._view_fn is not None and not self._materialized
-                and anchor is not None and radius is not None
-                and kwargs.get("value_range") is None
-                and kwargs.get("max_depth") is None):
-            subset = self._view_fn(anchor, radius, kwargs.get("direction", "both"))
-            if subset is not None:
-                return subset.to_dot(**kwargs)
+        max_depth = kwargs.get("max_depth")
+        value_range = kwargs.get("value_range")
+        has_crop = (anchor is not None or radius is not None
+                    or max_depth is not None or value_range is not None)
+        anchor_paired = (anchor is None) == (radius is None)
+        if (self._crop_fn is not None and not self._materialized
+                and has_crop and anchor_paired):
+            r = self._crop_fn(anchor=anchor, radius=radius,
+                              direction=kwargs.get("direction", "both"),
+                              max_depth=max_depth, value_range=value_range)
+            if r is not None:
+                subset, keep_keys = r
+                styling = {k: v for k, v in kwargs.items()
+                           if k not in ("anchor", "radius", "direction",
+                                        "max_depth", "value_range")}
+                return subset.to_dot(_keep=keep_keys, **styling)
         self._ensure()
         return super().to_dot(**kwargs)
 

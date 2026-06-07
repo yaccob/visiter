@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-06-07
+
+### Changed
+- **The native crop fast path now covers every crop mode, not just
+  `anchor=/radius=`.** `to_dot(max_depth=…)`, `to_dot(value_range=…)`, and any
+  combination with `anchor=/radius=` are computed natively — as the intersection
+  of the applicable filters (neighborhood BFS, depth-from-roots forward BFS,
+  integer-range filter) — **without materializing the full graph in Python**.
+  In 0.19.0 only `anchor=/radius=` took the native path; `max_depth`/`value_range`
+  fell back to full materialization. `to_dot` gained an internal precomputed-keep
+  path so the native side computes the keep set and `to_dot` renders it,
+  reproducing the same DOT (ghost stubs included). `value_range` is compared at
+  arbitrary precision (decimal-string), so keys beyond any fixed integer width
+  crop correctly. Requires `visiter_native >= 0.4.0` (new `crop_vitgraph`) and
+  the `[storage]` extra (pyarrow); otherwise the pure-Python crop is used.
+
 ## [0.19.0] — 2026-06-07
 
 ### Added

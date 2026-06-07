@@ -477,3 +477,39 @@ def test_rust_view_returns_neighborhood_subgraph():
     # cut. The kept set is what a radius-1 crop renders.
     assert h.is_materialized is False
     assert "4" in view["nodes"] and "8" in view["nodes"] and "2" in view["nodes"]
+
+
+@rustc
+def test_rust_native_crop_dot_parity_all_modes():
+    # The native crop fast path must reproduce the full-materialize + Python-crop
+    # DOT byte-for-byte for EVERY crop mode and combination — not just
+    # anchor/radius — without materializing the handle.
+    pytest.importorskip("pyarrow")
+    from visiter import _accel
+    if not _accel.native_available():
+        pytest.skip("native engine (visiter_native) not installed")
+
+    def mk():
+        return (viter([1], max_depth=12, max_nodes=None, lang="rust", bind="s")
+                .case("s >= 1", "s * 2", label="x2", id="x2")
+                .case("(s - 1) % 3 == 0 && (s - 1) / 3 > 1 "
+                      "&& ((s - 1) / 3) % 2 == 1",
+                      "(s - 1) / 3", label="d3", id="d3")).build()
+
+    specs = [
+        dict(max_depth=4),                                              # depth only
+        dict(value_range=(1, 64)),                                      # range only
+        dict(anchor="8", radius=2, direction="both"),                  # nbhd only
+        dict(anchor="8", radius=3, direction="both", max_depth=5),     # nbhd ∩ depth
+        dict(anchor="16", radius=3, direction="forward",
+             value_range=(1, 200)),                                    # nbhd ∩ range
+        dict(max_depth=6, value_range=(1, 100)),                       # depth ∩ range
+        dict(anchor="8", radius=4, direction="both", max_depth=6,
+             value_range=(1, 300)),                                    # all three
+    ]
+    for spec in specs:
+        ref = mk().materialize().to_dot(**spec)
+        h = mk()
+        got = h.to_dot(**spec)
+        assert h.is_materialized is False, f"handle materialized for {spec}"
+        assert got.source == ref.source, f"DOT mismatch for {spec}"
