@@ -7,6 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-06-07
+
+### Added
+- **Lazy `GraphHandle` build result.** `build()` returns a `GraphHandle` (a
+  `dict` subclass) that defers parsing the build output until first access: the
+  native BFS output is persisted content-addressed and the materialization into
+  a Python graph happens lazily — or never, if the graph is only stored or
+  handed to another tool, removing the build-time materialization wall.
+  `.is_materialized` and a one-time info log surface the cost; an identical
+  re-build is served from cache without re-running the engine.
+- **Native `.vitgraph` store and subset view for `lang="rust"`.**
+  `GraphHandle.to_vitgraph()` writes the columnar store straight from the native
+  build output (no Python materialization) via `visiter_native` 0.3.0's
+  `dump_to_vitgraph`. `GraphHandle.view(anchor, radius, direction)` extracts a
+  radius-hop neighborhood natively (`view_vitgraph`), and `to_dot(anchor=,
+  radius=)` uses it to render a subset **without materializing the full graph**,
+  reproducing the same DOT (ghost stubs included) as cropping the full graph.
+- **Content-addressed cross-session build cache.** Under `~/.cache/visiter/graphs`
+  (override with `VISITER_CACHE_DIR`), keyed on the generated source + bounds +
+  a toolchain/semantics hash for automatic invalidation. `VISITER_NO_CACHE`
+  disables reuse; a process-safe GC bounds the size (`VISITER_CACHE_MAX_BYTES`).
+
+### Changed
+- All build paths (pure Python, native engine, `lang="rust"`) now return a
+  `GraphHandle` for a uniform `.view()` / `.to_vitgraph()` / `.is_materialized`
+  API. For the eager paths it is pre-materialized and behaves exactly like the
+  dict returned before.
+- The `[native]` extra now requires `visiter_native >= 0.3.0` (feature-detected,
+  so an older native build still works via the pure-Python fallback).
+
+### Known limitations
+- The native subset fast path engages for `to_dot(anchor=, radius=)` only; a
+  `max_depth=` or `value_range=` crop still materializes the full graph in
+  Python (the crops are the same BFS, so this is a planned follow-up).
+- The native `.vitgraph` store and view need the `[storage]` extra (pyarrow) to
+  read results back; with `[native]` alone these operations fall back to the
+  pure-Python crop (correct, just not accelerated). For the full native path
+  install `visiter[native,storage]`.
+
 ## [0.18.0] — 2026-06-06
 
 ### Fixed
