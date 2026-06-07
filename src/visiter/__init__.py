@@ -58,7 +58,7 @@ from .render_helpers import (
     resolve_op_colors,
 )
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     # Core API
