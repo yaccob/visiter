@@ -645,55 +645,56 @@ fn read_vitgraph(path: &str) -> PyResult<VitGraph> {
     })
 }
 
-#[pyfunction]
-#[pyo3(signature = (in_path, out_path, anchors, radius, direction))]
-fn view_vitgraph(
-    in_path: &str,
-    out_path: &str,
-    anchors: Vec<String>,
-    radius: i64,
-    direction: &str,
-) -> PyResult<()> {
+fn check_direction(direction: &str) -> PyResult<()> {
     if direction != "forward" && direction != "backward" && direction != "both" {
         return Err(PyValueError::new_err(format!(
             "direction must be 'forward', 'backward', or 'both'; got {direction:?}"
         )));
     }
-    // Reuse the parsed full graph across view queries in this process.
-    let vg = {
-        let cache = GRAPH_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut guard = cache.lock().map_err(|_| err("graph cache poisoned"))?;
-        if let Some(g) = guard.get(in_path) {
-            Arc::clone(g)
-        } else {
-            let g = Arc::new(read_vitgraph(in_path)?);
-            guard.insert(in_path.to_string(), Arc::clone(&g));
-            g
-        }
-    };
-    let n = vg.keys.len();
-    let index_of: HashMap<&str, u32> =
-        vg.keys.iter().enumerate().map(|(i, k)| (k.as_str(), i as u32)).collect();
+    Ok(())
+}
 
-    // Directional adjacency for the BFS, matching `_bfs_neighborhood`.
+/// Reuse the parsed full graph across queries in this process (built once).
+fn load_graph(in_path: &str) -> PyResult<Arc<VitGraph>> {
+    let cache = GRAPH_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = cache.lock().map_err(|_| err("graph cache poisoned"))?;
+    if let Some(g) = guard.get(in_path) {
+        Ok(Arc::clone(g))
+    } else {
+        let g = Arc::new(read_vitgraph(in_path)?);
+        guard.insert(in_path.to_string(), Arc::clone(&g));
+        Ok(g)
+    }
+}
+
+/// Multi-source BFS keep mask from anchor keys within `radius`, following
+/// `direction` — the same expansion rule as `to_dot._bfs_neighborhood`.
+fn bfs_keep(
+    vg: &VitGraph,
+    index_of: &HashMap<&str, u32>,
+    anchors: &[String],
+    radius: i64,
+    direction: &str,
+) -> PyResult<Vec<bool>> {
+    let n = vg.keys.len();
+    let use_fwd = direction == "forward" || direction == "both";
+    let use_bwd = direction == "backward" || direction == "both";
     let mut adj: Vec<Vec<u32>> = vec![Vec::new(); n];
     for i in 0..vg.e_src.len() {
-        let (s, d) = (vg.e_src[i] as u32, vg.e_dst[i] as u32);
-        if direction == "forward" || direction == "both" {
-            adj[s as usize].push(d);
+        let (s, d) = (vg.e_src[i] as usize, vg.e_dst[i] as usize);
+        if use_fwd {
+            adj[s].push(d as u32);
         }
-        if direction == "backward" || direction == "both" {
-            adj[d as usize].push(s);
+        if use_bwd {
+            adj[d].push(s as u32);
         }
     }
-
-    // Multi-source BFS bounded by radius (same expansion rule as Python).
     let mut dist: Vec<i64> = vec![-1; n];
     let mut frontier: Vec<u32> = Vec::new();
-    for a in &anchors {
-        let &idx = index_of
-            .get(a.as_str())
-            .ok_or_else(|| PyValueError::new_err(format!("anchor {a:?} is not a node in the graph")))?;
+    for a in anchors {
+        let &idx = index_of.get(a.as_str()).ok_or_else(|| {
+            PyValueError::new_err(format!("anchor {a:?} is not a node in the graph"))
+        })?;
         if dist[idx as usize] < 0 {
             dist[idx as usize] = 0;
             frontier.push(idx);
@@ -714,11 +715,15 @@ fn view_vitgraph(
         }
         frontier = nxt;
     }
-    let keep: Vec<bool> = dist.iter().map(|&d| d >= 0).collect();
+    Ok(dist.iter().map(|&d| d >= 0).collect())
+}
 
-    // Subset nodes = kept ∪ boundary (the non-kept endpoint of any edge with
-    // exactly one endpoint kept). The boundary lets to_dot draw ghost stubs.
-    let mut in_subset = keep.clone();
+/// Emit the keep ∪ boundary subset to `out_path` (kept nodes plus the non-kept
+/// endpoints of boundary-crossing edges, all incident edges, pseudo-edges from
+/// kept nodes), preserving original order. Returns the kept node keys.
+fn emit_subset(vg: &VitGraph, keep: &[bool], out_path: &str) -> PyResult<Vec<String>> {
+    let n = vg.keys.len();
+    let mut in_subset = keep.to_vec();
     for i in 0..vg.e_src.len() {
         let (s, d) = (vg.e_src[i] as usize, vg.e_dst[i] as usize);
         if keep[s] != keep[d] {
@@ -726,8 +731,6 @@ fn view_vitgraph(
             in_subset[d] = true;
         }
     }
-
-    // Old → new index map, preserving original node order.
     let mut new_id: Vec<i32> = vec![-1; n];
     let mut keys = Vec::new();
     let mut depths = Vec::new();
@@ -742,9 +745,6 @@ fn view_vitgraph(
             node_tags.push(vg.node_tags[i].clone());
         }
     }
-
-    // Subset edges = edges incident to a kept node (both endpoints are then in
-    // the subset by construction), preserving original order.
     let mut e_src = Vec::new();
     let mut e_dst = Vec::new();
     let mut e_op = Vec::new();
@@ -758,8 +758,6 @@ fn view_vitgraph(
             e_label.push(vg.e_label[i].clone());
         }
     }
-
-    // Subset pseudo-edges = those from a kept node.
     let mut p_src = Vec::new();
     let mut p_op = Vec::new();
     let mut p_label = Vec::new();
@@ -771,11 +769,123 @@ fn view_vitgraph(
             p_label.push(vg.p_label[i].clone());
         }
     }
-
+    let keep_keys: Vec<String> =
+        (0..n).filter(|&i| keep[i]).map(|i| vg.keys[i].clone()).collect();
     write_store(
-        out_path, keys, depths, key_types, node_tags, e_src, e_dst, e_op, e_label,
-        p_src, p_op, p_label, &vg.meta,
-    )
+        out_path, keys, depths, key_types, node_tags, e_src, e_dst, e_op, e_label, p_src,
+        p_op, p_label, &vg.meta,
+    )?;
+    Ok(keep_keys)
+}
+
+/// Compare two decimal integer strings numerically (arbitrary precision), for
+/// the `value_range` filter — keys can exceed any fixed integer width.
+fn cmp_mag(a: &str, b: &str) -> std::cmp::Ordering {
+    match a.len().cmp(&b.len()) {
+        std::cmp::Ordering::Equal => a.cmp(b),
+        o => o,
+    }
+}
+
+fn num_str_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering::*;
+    let (na, ma) = match a.strip_prefix('-') {
+        Some(s) => (true, s),
+        None => (false, a),
+    };
+    let (nb, mb) = match b.strip_prefix('-') {
+        Some(s) => (true, s),
+        None => (false, b),
+    };
+    if na != nb {
+        return if na { Less } else { Greater };
+    }
+    let mag = cmp_mag(ma, mb);
+    if na {
+        mag.reverse()
+    } else {
+        mag
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (in_path, out_path, anchors, radius, direction))]
+fn view_vitgraph(
+    in_path: &str,
+    out_path: &str,
+    anchors: Vec<String>,
+    radius: i64,
+    direction: &str,
+) -> PyResult<()> {
+    check_direction(direction)?;
+    let vg = load_graph(in_path)?;
+    let index_of: HashMap<&str, u32> =
+        vg.keys.iter().enumerate().map(|(i, k)| (k.as_str(), i as u32)).collect();
+    let keep = bfs_keep(&vg, &index_of, &anchors, radius, direction)?;
+    emit_subset(&vg, &keep, out_path)?;
+    Ok(())
+}
+
+/// General crop: compute `keep` as the intersection of the applicable filters —
+/// anchor/radius/direction BFS, max_depth-from-roots forward BFS, and
+/// value_range integer filter — mirroring `to_dot`'s crop composition, then emit
+/// the keep ∪ boundary subset and return the kept node keys (so the caller can
+/// hand them to `to_dot(_keep=…)` for byte-identical rendering).
+#[pyfunction]
+#[pyo3(signature = (in_path, out_path, anchors, radius, direction, max_depth, roots,
+                    value_lo, value_hi))]
+#[allow(clippy::too_many_arguments)]
+fn crop_vitgraph(
+    in_path: &str,
+    out_path: &str,
+    anchors: Vec<String>,
+    radius: i64,
+    direction: &str,
+    max_depth: i64,
+    roots: Vec<String>,
+    value_lo: Option<String>,
+    value_hi: Option<String>,
+) -> PyResult<Vec<String>> {
+    check_direction(direction)?;
+    let vg = load_graph(in_path)?;
+    let n = vg.keys.len();
+    let index_of: HashMap<&str, u32> =
+        vg.keys.iter().enumerate().map(|(i, k)| (k.as_str(), i as u32)).collect();
+
+    fn intersect(acc: Option<Vec<bool>>, s: Vec<bool>) -> Vec<bool> {
+        match acc {
+            None => s,
+            Some(a) => a.iter().zip(s.iter()).map(|(x, y)| *x && *y).collect(),
+        }
+    }
+
+    let mut keep: Option<Vec<bool>> = None;
+    if !anchors.is_empty() {
+        let s = bfs_keep(&vg, &index_of, &anchors, radius, direction)?;
+        keep = Some(intersect(keep, s));
+    }
+    if max_depth >= 0 && !roots.is_empty() {
+        let s = bfs_keep(&vg, &index_of, &roots, max_depth, "forward")?;
+        keep = Some(intersect(keep, s));
+    }
+    if let (Some(lo), Some(hi)) = (value_lo.as_ref(), value_hi.as_ref()) {
+        // value_range applies only when every node key is an integer (else
+        // to_dot warns and ignores it — match by ignoring here too).
+        if vg.key_types.iter().all(|t| t == "integer") {
+            let s: Vec<bool> = vg
+                .keys
+                .iter()
+                .map(|k| {
+                    num_str_cmp(k, lo) != std::cmp::Ordering::Less
+                        && num_str_cmp(k, hi) != std::cmp::Ordering::Greater
+                })
+                .collect();
+            keep = Some(intersect(keep, s));
+        }
+    }
+
+    let keep = keep.unwrap_or_else(|| vec![true; n]);
+    emit_subset(&vg, &keep, out_path)
 }
 
 #[pymodule]
@@ -783,6 +893,7 @@ fn visiter_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_raw, m)?)?;
     m.add_function(wrap_pyfunction!(dump_to_vitgraph, m)?)?;
     m.add_function(wrap_pyfunction!(view_vitgraph, m)?)?;
-    m.add("__version__", "0.3.0")?;
+    m.add_function(wrap_pyfunction!(crop_vitgraph, m)?)?;
+    m.add("__version__", "0.4.0")?;
     Ok(())
 }
