@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use arrow_array::builder::{ListBuilder, StringBuilder};
 use arrow_array::{Array, ArrayRef, Int32Array, ListArray, RecordBatch, StringArray};
@@ -508,6 +508,12 @@ fn write_store(
 // DOT as `to_dot(full, …)` — without materializing the full graph in Python.
 // ---------------------------------------------------------------------------
 
+/// Process-wide cache of parsed full graphs, keyed by .vitgraph path. A graph
+/// is read+parsed once per process; subsequent view queries (any anchor/radius)
+/// reuse it — the "build the full graph once, render many subsets" workflow.
+/// Paths are content-addressed, so a stale path never aliases a different graph.
+static GRAPH_CACHE: OnceLock<Mutex<HashMap<String, Arc<VitGraph>>>> = OnceLock::new();
+
 struct VitGraph {
     meta: String,
     keys: Vec<String>,
@@ -653,7 +659,18 @@ fn view_vitgraph(
             "direction must be 'forward', 'backward', or 'both'; got {direction:?}"
         )));
     }
-    let vg = read_vitgraph(in_path)?;
+    // Reuse the parsed full graph across view queries in this process.
+    let vg = {
+        let cache = GRAPH_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut guard = cache.lock().map_err(|_| err("graph cache poisoned"))?;
+        if let Some(g) = guard.get(in_path) {
+            Arc::clone(g)
+        } else {
+            let g = Arc::new(read_vitgraph(in_path)?);
+            guard.insert(in_path.to_string(), Arc::clone(&g));
+            g
+        }
+    };
     let n = vg.keys.len();
     let index_of: HashMap<&str, u32> =
         vg.keys.iter().enumerate().map(|(i, k)| (k.as_str(), i as u32)).collect();
